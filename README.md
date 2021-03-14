@@ -26,7 +26,7 @@ assert(boo(3 3 3)  == "nice: " + 3^3)
 - [x] Pretty fast single-pass parser/compiler.
 - [x] Virtual machine and compact bytecode format.
 - [x] Pattern-matching functions with name-mangling.
-- [ ] Rust FFI.
+- [x] Rust FFI.
 - [ ] Goto and flow-control.
 - [ ] Lazy evaluation/compilation.
 - [ ] Nice errors.
