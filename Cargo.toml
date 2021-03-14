@@ -1,0 +1,21 @@
+[package]
+name = "m3"
+version = "0.1.0"
+authors = ["nilq <i.am.niels.nielsen@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+logos = "0.12.0"
+hashbrown = "0.9.1"
+fnv = "1.0.3"
+im-rc = "14.3.0"
+colored = "2.0.0"
+backtrace = "0.3.56"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 16
+panic = 'unwind'
