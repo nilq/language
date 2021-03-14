@@ -31,6 +31,11 @@ pub enum OpCode {
     Jump,
     JumpF,
     Loop,
+    Eq,
+    Neg,
+    Gt,
+    Lt,
+    Not,
 }
 
 impl OpCode {
@@ -70,6 +75,12 @@ impl OpCode {
             Jump         => 0x21,
             JumpF        => 0x22,
             Loop         => 0x23,
+
+            Eq           => 0x24,
+            Neg          => 0x25,
+            Gt           => 0x26,
+            Lt           => 0x27,
+            Not          => 0x28,
         };
 
         buffer.push(op)
@@ -117,6 +128,13 @@ macro_rules! decode_op {
             0x21 => $this.jmp(),
             0x22 => $this.jze(),
             0x23 => $this.loopy(),
+
+            0x24 => $this.eq(),
+            0x25 => $this.neg(),
+            0x26 => $this.gt(),
+            0x27 => $this.lt(),
+            0x28 => $this.not(),
+
 
             _ => unreachable!()
         }

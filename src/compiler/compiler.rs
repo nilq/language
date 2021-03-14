@@ -350,6 +350,44 @@ impl<'a> Compiler<'a> {
                 use self::Op::*;
 
                 match op {
+                    And => {
+                        self.compile_expr(left);
+
+                        let short_circuit_jmp = self.emit_jze();
+
+                        self.emit(OpCode::Pop);
+                        self.compile_expr(right);
+
+                        self.patch_jmp(short_circuit_jmp);
+                    },
+
+                    Nor => {
+                        self.compile_expr(left);
+                        self.emit(OpCode::Not);
+
+                        let short_circuit_jmp = self.emit_jze();
+
+                        self.emit(OpCode::Pop);
+                        self.compile_expr(right);
+                        self.emit(OpCode::Not);
+
+                        self.patch_jmp(short_circuit_jmp);
+                    },
+
+                    Or => {
+                        self.compile_expr(left);
+
+                        let else_jmp = self.emit_jze();
+                        let end_jmp = self.emit_jmp();
+
+                        self.patch_jmp(else_jmp);
+                        self.emit(OpCode::Pop);
+
+                        self.compile_expr(right);
+
+                        self.patch_jmp(end_jmp)
+                    },
+
                     _ => {    
                         self.compile_expr(left);
                         self.compile_expr(right);
@@ -361,9 +399,40 @@ impl<'a> Compiler<'a> {
                             Mul => self.emit(OpCode::Mul),
                             Div => self.emit(OpCode::Div),
                             Pow => self.emit(OpCode::Pow),
+
+                            Eq  => self.emit(OpCode::Eq),
+                            Lt  => self.emit(OpCode::Lt),
+                            Gt  => self.emit(OpCode::Gt),
+
+                            NEq => {
+                                self.emit(OpCode::Eq);
+                                self.emit(OpCode::Not)
+                            }
+
+                            GEq => {
+                                self.emit(OpCode::Lt);
+                                self.emit(OpCode::Not)
+                            }
+
+                            LEq => {
+                                self.emit(OpCode::Gt);
+                                self.emit(OpCode::Not)
+                            }
+
+                            _ => ()
                         }
                     }
                 }
+            }
+
+            Not(ref expr) => {
+                self.compile_expr(expr);
+                self.emit(OpCode::Not)
+            }
+
+            Neg(ref expr) => {
+                self.compile_expr(expr);
+                self.emit(OpCode::Neg)
             }
 
             String(ref s) => {

@@ -2,6 +2,8 @@ extern crate colored;
 
 use logos::{Logos, Span};
 
+mod prelude;
+
 mod lexer;
 use lexer::token::Token;
 
@@ -40,26 +42,28 @@ global lol = "hey tisser"
 
     let func_test = r#"
 func boo -> {
-    | 0 => "bruh what " + "working tis"
+    | 0 => "bruh what " + "working"
     | a b => a + b
     | 0 b => "hurra lol: " + b
-    | a b c => "nice: " +  a * b * c
+    | a b c => "nice: " + a * b * c
 }
 
-print boo(0)
-print boo(0 "ah")
-print boo(10 10)
-print boo(3 3 3)
+assert(not boo(0)  != "bruh what working")
+assert(boo(0 "ah") == "hurra lol: ah")
+assert(boo(10 10)  == 20)
+assert(boo(3 3 3)  == "nice: " + 3^3)
 "#;
 
     let lex = Token::lexer(func_test);
     let parser = Parser::new(lex.spanned().collect::<Vec<(Token, Span)>>());
 
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse(&["assert", "assert$v__1"]).unwrap();
     // println!("{:#?}", ast);
     // println!("{}", func_test);
 
     let mut vm = Vm::new();
+    vm.add_native("assert$v__1", prelude::assert, 1);
+
     vm.execute(ast, false);
 
     // println!("{:#?}", vm.globals);

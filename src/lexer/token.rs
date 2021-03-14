@@ -70,6 +70,28 @@ pub enum Token {
     #[token("%")]
     Mod,
 
+    #[token("==")]
+    Eq,
+    #[token("!=")]
+    NEq,
+    #[token("<")]
+    Lt,
+    #[token(">")]
+    Gt,
+    #[token("<=")]
+    LEq,
+    #[token(">=")]
+    GEq,
+    #[token("and")]
+    And,
+    #[token("or")]
+    Or,
+    #[token("nor")]
+    Nor,
+
+    #[token("not")]
+    Not,
+
     #[token("{")]
     LBrace,
     #[token("}")]

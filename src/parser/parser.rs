@@ -24,7 +24,11 @@ impl Parser {
         }
     }
 
-    pub fn parse(mut self) -> Result<Vec<Statement>, ()> {
+    pub fn parse(mut self, globals: &[&str]) -> Result<Vec<Statement>, ()> {
+        for global in globals {
+            self.symtab.assign_global(global.to_string());
+        }
+
         while self.remaining() > 0 {
             let s = self.statement()?;
             self.ast.push(s);
@@ -263,9 +267,9 @@ impl Parser {
                         for compatible_name in scope.variables
                                 .iter()
                                 .filter(|&(x, _)| x.starts_with(&binding.name)) {
-
+                            
                             if compatible_name.0 == &mangle_name {
-                                name = mangle_name;
+                                name = mangle_name.clone();
                                 found = true;
 
                                 break 'outer
@@ -274,6 +278,22 @@ impl Parser {
                             cache.push(&scope.variables[compatible_name.0])
                         }
                     }
+
+                    if !found {
+                        for compatible_name in self.symtab.globals
+                                .iter()
+                                .filter(|&(x, _)| x.starts_with(&binding.name)) {
+                            
+                            if compatible_name.0 == &mangle_name {
+                                name = mangle_name;
+                                found = true;
+                                break
+                            }
+
+                            cache.push(&self.symtab.globals[compatible_name.0])
+                        }
+                    }
+
 
                     if !found {
                         let mask_name = Self::mangle_mask_name(binding.name.clone(), &args);
@@ -286,7 +306,10 @@ impl Parser {
                                 continue
                             }
 
-                            let binding_mask = &binding.name.split("$").collect::<Vec<&str>>()[1..][..1];
+                            let binding_mask = &binding.name.split("$").collect::<Vec<&str>>()
+                                .iter()
+                                .map(|x| &x[..1])
+                                .collect::<Vec<&str>>()[1..];
 
                             if mask == binding_mask {
                                 name = binding.name.clone();
@@ -313,7 +336,7 @@ impl Parser {
                                     continue
                                 }
     
-                                for (i, mask) in mask.iter().enumerate() {
+                                for (i, _) in mask.iter().enumerate() {
                                     if !bool_mask[i] && i < binding_mask.len() && binding_mask[i] != "v" {
                                         inner_found = false;
                                         break
@@ -331,7 +354,6 @@ impl Parser {
                             if !found {
                                 for binding in cache {
                                     if mask_name == binding.name {
-                                        found = true;
                                         name = binding.name.clone();
                                         break
                                     }
@@ -362,28 +384,44 @@ impl Parser {
     fn atom(&mut self) -> Result<Expr, ()> {
         use self::Token::*;
 
-        let e = match self.next() {
-            (Number(n), span) => Expr::new(
+        let current = self.next();
+
+        let e = match current.0 {
+            Number(n) => Expr::new(
                 ExprNode::Number(n),
-                span
+                current.1
             ),
 
-            (String(s), span) => Expr::new(
+            String(s) => Expr::new(
                 ExprNode::String(s),
-                span
+                current.1
             ),
 
-            (Name(name), span) => if let Some(binding) =  self.symtab.get(&name) {
+            Name(name) => if let Some(binding) =  self.symtab.get(&name) {
                 Expr::new(
                     ExprNode::Var(
                         binding.clone()
                     ),
-                    span
+                    current.1
                 )
             } else {
                 println!("Can't find {}", name);
                 return Err(())
             }
+
+            Not => Expr::new(
+                ExprNode::Not(
+                    Box::new(self.expression()?)
+                ),
+                current.1
+            ),
+
+            Not => Expr::new(
+                ExprNode::Neg(
+                    Box::new(self.expression()?)
+                ),
+                current.1
+            ),
 
             c => todo!("{:?}", c)
         };
@@ -466,7 +504,7 @@ impl Parser {
 
     fn is_operator(token: &Token) -> bool {
         use self::Token::*;
-        [Add, Sub, Mul, Div, Pow, Mod].contains(token)
+        [Add, Sub, Mul, Div, Pow, Mod, Eq, NEq, Lt, Gt, LEq, GEq, Not, And, Or, Nor].contains(token)
     }
 
     fn top(&self) -> &TokenInfo {
@@ -498,9 +536,12 @@ impl Parser {
                     name.push_str(&n.to_string())
                 }
                 String(_) => {
-                    name.push_str("$str")
+                    name.push_str("$s")
                 }
-                _ => ()
+                _ => {
+                    arity += 1;
+                    name.push_str("$v")
+                }
             }
         }
 
@@ -539,7 +580,9 @@ impl Parser {
                 String(_) => {
                     mask.push("s".to_string())
                 }
-                _ => ()
+                _ => {
+                    mask.push("v".to_string())
+                }
             }
         }
 

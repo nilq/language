@@ -42,7 +42,7 @@ impl Scope {
 
 pub struct SymTab {
     pub scopes: Vec<Scope>,
-    globals: HashMap<String, Binding>
+    pub globals: HashMap<String, Binding>
 }
 
 impl SymTab {

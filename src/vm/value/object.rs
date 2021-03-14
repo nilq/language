@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Display, Debug};
 
-use super::super::chunk::Chunk;
+use super::super::{chunk::Chunk, heap::Heap};
 use super::value::{Value, WithHeap};
 
 macro_rules! impl_as (
@@ -21,6 +21,7 @@ pub enum Obj {
     String(String),
     Func(Func),
     Closure(Closure),
+    NativeFunction(NativeFunction),
 }
 
 impl Obj {
@@ -35,6 +36,16 @@ impl Obj {
             None
         }
     }
+
+    pub fn native_fn(name: &str, arity: u8, function: fn(&mut Heap<Obj>, &[Value]) -> Value) -> Self {
+        Obj::NativeFunction(
+            NativeFunction {
+                name: name.into(),
+                arity,
+                function,
+            },
+        )
+    }
 }
 
 
@@ -46,6 +57,7 @@ impl Debug for Obj {
             String(ref s) => write!(f, "{:?}", s),
             Func(ref fun) => write!(f, "<fn {:?}>", fun.name),
             Closure(ref cl) => write!(f, "<closure {:?}>", cl.func.name),
+            NativeFunction(ref na) => write!(f, "<ffi {:?}>", na.name),
         }
     }
 }
@@ -58,6 +70,7 @@ impl<'h, 'a> Display for WithHeap<'h, &'a Obj> {
             String(ref s) => write!(f, "{}", s),
             Func(ref fun) => write!(f, "<fn {:?}>", fun.name),
             Closure(ref cl) => write!(f, "<closure {:?}>", cl.func.name),
+            NativeFunction(ref na) => write!(f, "<ffi {:?}>", na.name),
         }
     }
 }
@@ -141,3 +154,11 @@ impl Closure {
         self.upvalues[i].clone()
     }
 }
+
+#[derive(Clone)]
+pub struct NativeFunction {
+    pub name: String,
+    pub arity: u8,
+    pub function: fn(&mut Heap<Obj>, &[Value]) -> Value,
+}
+

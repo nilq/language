@@ -1,4 +1,5 @@
-# a language yet to be named
+# spirit
+# an animal one
 
 ## Syntax-teaser
 
@@ -11,13 +12,13 @@ func boo -> {
     | 0 => "bruh what " + "working"
     | a b => a + b
     | 0 b => "hurra lol: " + b
-    | a b c => "nice: " +  a * b * c
+    | a b c => "nice: " + a * b * c
 }
 
-print boo(0)
-print boo(0 "ah")
-print boo(10 10)
-print boo(3 3 3)
+assert(not boo(0)  != "bruh what working")
+assert(boo(0 "ah") == "hurra lol: ah")
+assert(boo(10 10)  == 20)
+assert(boo(3 3 3)  == "nice: " + 3^3)
 ```
 
 ## Todo

@@ -20,11 +20,15 @@ macro_rules! binary_op {
         let b = $self.pop();
         let a = $self.pop();
 
-        if let (Variant::Number(a), Variant::Number(b)) = (a.decode(), b.decode()) {
-            let c = a $op b;
-            $self.push(c.into());
+        match (a.decode(), b.decode()) {
+            (Variant::Number(a), Variant::Number(b)) => {
+                let c = a $op b;
+                $self.push(c.into());
 
-            return
+                return
+            },
+
+            _ => panic!("can't operate these.")
         }
     }
 }
@@ -153,7 +157,6 @@ impl Vm {
             .expect("[bruh moment] `GetGlobal` requires a string identifier");
         
         if let Some(value) = self.globals.get(global).cloned() {
-            println!("PUSHING {:#?} of {}", value, global);
             self.push(value)
         } else {
             self.runtime_error(&format!("[bruh moment] undefined global variable: `{}`", global.clone()))
@@ -262,11 +265,32 @@ impl Vm {
                     self.call_closure(handle, arity)
                 },
 
+                NativeFunction(ref native) => {
+                    if native.arity != arity {
+                        self.runtime_error(&format!("arity mismatch: {} != {} @ ({} {})", native.arity, arity, native.name, native.arity))
+                    }
+
+                    let value = (native.function)(&mut self.heap, &self.stack[frame_start..]);
+
+                    self.stack.drain(frame_start + 1..);
+
+                    self.stack.pop();
+                    self.stack.push(value);
+                },
+
                 _ => todo!()
             }
         } else {
             panic!("You are calling: {:?}", callee)
         }
+    }
+
+    pub fn add_native(&mut self, name: &str, func: fn(&mut Heap<Obj>, &[Value]) -> Value, arity: u8) {
+        let function = self.allocate(
+            Obj::native_fn(name, arity, func)
+        );
+
+        self.globals.insert(name.into(), function.into());
     }
 
     fn runtime_error(&self, err: &str) {
@@ -315,6 +339,50 @@ impl Vm {
             },
             _ => {}
         }
+    }
+
+    fn not(&mut self) {
+        let a = self.pop();
+
+        self.push(
+            if a.truthy() {
+                Value::falselit()
+            } else {
+                Value::truelit()
+            }
+        )
+    }
+
+    fn neg(&mut self) {
+        if let Variant::Number(a) = self.pop().decode() {
+            self.push((-a).into());
+        }
+    }
+
+    fn eq(&mut self) {
+        let b = self.pop();
+        let a = self.pop();
+
+        use self::Variant::*;
+
+        match (a.decode(), b.decode()) {
+            (Number(a), Number(b)) => return self.push((a == b).into()),
+            (Obj(a), Obj(b)) => {
+                let a = self.deref(a).as_string().unwrap();
+                let b = self.deref(b).as_string().unwrap();
+
+                return self.push((a == b).into())
+            },
+            _ => self.push(false.into())
+        }
+    }
+
+    fn gt(&mut self) {
+        binary_op!(self, >);
+    }
+
+    fn lt(&mut self) {
+        binary_op!(self, <);
     }
 
     fn sub(&mut self) {

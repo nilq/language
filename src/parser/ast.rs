@@ -10,6 +10,15 @@ pub enum Op {
     Div,
     Pow,
     Mod,
+    Eq,
+    NEq,
+    LEq,
+    GEq,
+    And,
+    Or,
+    Nor,
+    Lt,
+    Gt,
 }
 
 impl Op {
@@ -23,6 +32,15 @@ impl Op {
             Token::Div  => Div,
             Token::Mod  => Mod,
             Token::Pow  => Pow,
+            Token::Eq   => Eq,
+            Token::NEq  => NEq,
+            Token::LEq  => LEq,
+            Token::GEq  => GEq,
+            Token::And  => And,
+            Token::Or   => Or,
+            Token::Nor  => Nor,
+            Token::Lt   => Lt,
+            Token::Gt   => Gt,
 
             _ => return None
         };
@@ -36,12 +54,21 @@ impl Op {
         use self::Op::*;
 
         match *self {
-            Add  => 0,
-            Sub  => 0,
-            Mul  => 1,
-            Div  => 1,
-            Mod  => 1,
-            Pow  => 2,
+            Eq   => 0,
+            NEq  => 0,
+            LEq  => 0,
+            GEq  => 0,
+            And  => 0,
+            Or   => 0,
+            Nor  => 0,
+            Lt   => 0,
+            Gt   => 0,
+            Add  => 1,
+            Sub  => 1,
+            Mul  => 2,
+            Div  => 2,
+            Mod  => 2,
+            Pow  => 3,
         }
     } 
 }
@@ -52,7 +79,9 @@ pub enum ExprNode {
     Number(f64),
     String(String),
     Binary(Box<Expr>, Op, Box<Expr>),
-    Call(Box<Expr>, Vec<Expr>)
+    Call(Box<Expr>, Vec<Expr>),
+    Not(Box<Expr>),
+    Neg(Box<Expr>),
 }
 
 #[derive(Debug, Clone)]
