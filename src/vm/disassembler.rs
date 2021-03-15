@@ -68,6 +68,7 @@ impl<'c> Disassembler<'c> {
     fn neg(&self) { eprint!("neg"); }
     fn not(&self) { eprint!("not"); }
     fn eq(&self) { eprint!("eq"); }
+    fn band(&self) { eprint!("band"); }
     fn gt(&self) { eprint!("gt"); }
     fn lt(&self) { eprint!("lt"); }
     fn pop(&self) { eprint!("pop"); }

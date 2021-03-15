@@ -27,6 +27,7 @@ assert(boo(3 3 3)  == "nice: " + 3^3)
 - [x] Virtual machine and compact bytecode format.
 - [x] Pattern-matching functions with name-mangling.
 - [x] Rust FFI.
+- [ ] IMPORTANT: Fallback-function to get hard-to-predict values.
 - [ ] Goto and flow-control.
 - [ ] Lazy evaluation/compilation.
 - [ ] Nice errors.

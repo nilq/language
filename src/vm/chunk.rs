@@ -36,6 +36,7 @@ pub enum OpCode {
     Gt,
     Lt,
     Not,
+    BAnd, // Boolean and. Not jumping.
 }
 
 impl OpCode {
@@ -81,6 +82,8 @@ impl OpCode {
             Gt           => 0x26,
             Lt           => 0x27,
             Not          => 0x28,
+
+            BAnd         => 0x29,
         };
 
         buffer.push(op)
@@ -135,6 +138,7 @@ macro_rules! decode_op {
             0x27 => $this.lt(),
             0x28 => $this.not(),
 
+            0x29 => $this.band(),
 
             _ => unreachable!()
         }

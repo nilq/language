@@ -157,12 +157,13 @@ impl Binding {
     }
 }
 
-type Branch = (Vec<Expr>, Statement);
+type Branch = (Vec<Expr>, Statement, Binding, usize);
 
 #[derive(Debug, Clone)]
 pub enum StatementNode {
     Assign(Binding, Expr),
-    Fn(Binding, Vec<Branch>),
+    Fn(Binding, Box<Branch>),
+    FnCluster(Vec<Statement>),
     Global(Binding, Expr),
     Let(Binding, Expr),
     Block(Vec<Statement>),

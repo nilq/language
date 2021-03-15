@@ -16,12 +16,24 @@ impl Scope {
         }
     }
 
+    pub fn new(depth: usize, function_depth: usize) -> Self {
+        Scope {
+            depth,
+            function_depth,
+            variables: HashMap::new()
+        }
+    }
+
     pub fn child(&self, is_function: bool) -> Self {
         Scope {
             depth: self.depth + 1,
             function_depth: self.function_depth + is_function as usize,
             variables: HashMap::new()
         }
+    }
+
+    pub fn local(&self, name: String) -> Binding {
+        Binding::local(name.clone(), self.depth, self.function_depth)
     }
 
     pub fn assign_local(&mut self, name: String) -> Binding {
@@ -51,6 +63,10 @@ impl SymTab {
             scopes: vec!(Scope::root()),
             globals: HashMap::new()
         }
+    }
+
+    pub fn local(&mut self, name: String) -> Binding {
+        self.top_mut().local(name)
     }
 
     pub fn assign_local(&mut self, name: String) -> Binding {
@@ -94,6 +110,11 @@ impl SymTab {
         self.scopes.push(scope)
     }
 
+    pub fn enter_tmp(&mut self) {
+        let scope = self.top().child(false);
+        self.scopes.push(scope)
+    }
+
     pub fn enter_func(&mut self) {
         let scope = self.top().child(true);
         self.scopes.push(scope)
@@ -101,6 +122,10 @@ impl SymTab {
 
     pub fn yeet(&mut self) {
         self.scopes.pop();
+    }
+
+    pub fn current_depth(&self) -> usize {
+        self.top().depth
     }
 
     fn top(&self) -> &Scope {

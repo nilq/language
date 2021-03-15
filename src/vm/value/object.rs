@@ -75,6 +75,28 @@ impl<'h, 'a> Display for WithHeap<'h, &'a Obj> {
     }
 }
 
+pub struct FuncBuilder {
+    pub name: String,
+    pub chunk: Chunk,
+    arity: u8,
+    pub upvalue_count: usize,
+}
+
+impl FuncBuilder {
+    pub fn new(name: String, arity: u8) -> Self {
+        let chunk = Chunk::new(name.clone());
+        FuncBuilder { name, arity, chunk, upvalue_count: 0 }
+    }
+
+    pub fn build(self) -> Func {
+        Func::new(self)
+    }
+
+    pub fn chunk_mut(&mut self) -> &mut Chunk {
+        &mut self.chunk
+    }
+}
+
 #[derive(Clone)]
 pub struct Func {
     pub name: String,
@@ -84,7 +106,16 @@ pub struct Func {
 }
 
 impl Func {
-    pub fn new(name: String, arity: u8) -> Self {
+    fn new(builder: FuncBuilder) -> Self {
+        Func {
+            name: builder.name,
+            arity: builder.arity,
+            chunk: builder.chunk,
+            upvalue_count: builder.upvalue_count,
+        }
+    }
+
+    pub fn raw(name: String, arity: u8) -> Self {
         Func {
             name: name.clone(),
             chunk: Chunk::new(name),

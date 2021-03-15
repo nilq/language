@@ -2,13 +2,13 @@ use crate::vm::{
     chunk::{OpCode, Chunk},
     value::{
         value::Value,
-        object::{Obj, Func},
+        object::{Obj, Func, FuncBuilder},
     },
     heap::{Heap, Handle}
 };
 use crate::parser::ast::{Statement, StatementNode, Expr, ExprNode, Binding, Op};
 
-use std::{ops::Deref, usize};
+use std::{ops::Deref, usize, collections::HashMap};
 
 #[derive(Debug, Clone)]
 pub struct Local {
@@ -28,7 +28,7 @@ pub struct State {
     pub locals: Vec<Local>,
     upvalues: Vec<UpValue>,
 
-    func: Func,
+    func: FuncBuilder,
     line: usize,
 
     scope_depth: usize,
@@ -36,7 +36,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(name: String, func: Func, scope_depth: usize) -> Self {
+    pub fn new(name: String, func: FuncBuilder, scope_depth: usize) -> Self {
         State {
             locals: Vec::new(),
             upvalues: Vec::new(),
@@ -231,15 +231,53 @@ impl<'a> Compiler<'a> {
                 self.compile_statement(s);
             }
 
-            Fn(ref binding, ref patterns) => {
-                // Binding var
-                for pattern in patterns {
-                    let mut name = binding.name.clone();
+            // Fn(_, ref patterns) => {
+            //     // Binding var
+            //     let mut dispatcher: HashMap<usize, Vec<(&Binding, usize)>> = HashMap::new();
+
+            //     for (i, pattern) in patterns.iter().enumerate() {
+            //         let arity = pattern.3;
+            //         let entry = (&pattern.2, i);
+
+            //         if let Some(branch) = dispatcher.get_mut(&arity) {
+            //             branch.push(entry)
+            //         } else {
+            //             dispatcher.insert(arity, vec!(entry));
+            //         }
+            //     }
+
+            //     self.compile_pattern(&patterns, pattern.clone(), &dispatcher);
+            // }
+
+            FnCluster(ref funcs) => {
+                let mut pattern_funcs = Vec::new();
+
+                for func in funcs.iter() {
+                    if let Fn(_, ref pattern) = func.node {
+                        pattern_funcs.push(pattern.deref())
+                    }
+                }
+
+                let mut dispatcher: HashMap<usize, Vec<(&Binding, usize)>> = HashMap::new();
+
+                for (i, pattern) in pattern_funcs.iter().enumerate() {
+                    let arity = pattern.3;
+                    let entry = (&pattern.2, i);
+
+                    if let Some(branch) = dispatcher.get_mut(&arity) {
+                        branch.push(entry)
+                    } else {
+                        dispatcher.insert(arity, vec!(entry));
+                    }
+                }
+
+                for pattern in pattern_funcs.iter() {
+                    // let mut name = binding.name.clone();
 
                     // Self::mangle_name(&mut name, &pattern.0);
 
-                    let mangled = Binding::from(name, &binding);
-                    self.compile_pattern(&mangled, pattern.clone());
+                    // let mangled = Binding::from(name, &binding);
+                    self.compile_pattern(&pattern_funcs, pattern, &dispatcher);
                 }
             }
 
@@ -247,9 +285,9 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile_pattern(&mut self, binding: &Binding, pattern: (Vec<Expr>, Statement)) {
+    fn compile_pattern(&mut self, patterns: &Vec<&(Vec<Expr>, Statement, Binding, usize)>, pattern: &(Vec<Expr>, Statement, Binding, usize), dispatcher: &HashMap<usize, Vec<(&Binding, usize)>>) {
         // Function
-        self.var_define(binding, None);
+        self.var_define(&pattern.2, None);
 
         let mut params = Vec::new();
 
@@ -264,27 +302,104 @@ impl<'a> Compiler<'a> {
 
         let arity = params.len() as u8;
 
-        self.start_function(&binding.name, arity, 1);
-        
+        self.start_function(&pattern.2.name, arity, 1);
+
         for p in params {
             self.state_mut().add_local(p.name(), 0);
             self.state_mut().resolve_local(p.name());
         }
 
-        let body = if let StatementNode::Block(body) = pattern.1.node {
-            body
+        // Dispatch potential fucky runtime stuff to their respective fucky mangled handles. :-)
+
+        let mut end_jmp = Vec::new();
+        let mut should_patch = false;
+
+        // We are doing this if it is a variable parameter. Hackerman.
+        if pattern.2.name.contains("$v") {
+            let arity = pattern.3;
+
+            // We need other branches of same arity only.
+            if let Some(branches) = dispatcher.get(&arity) {
+                for (branch, pattern_index ) in branches.iter() {
+                    if branch.name == pattern.2.name {
+                        continue
+                    }
+
+                    for (params, _, branch_binding, ..) in patterns.get(*pattern_index) {
+                        let mut should_if = false; // Whether there is stuff to check.
+
+                        for (i, param_own) in pattern.0.iter().enumerate() {
+                            if let ExprNode::Var(_) = param_own.node {
+                                let other_param = &params[i];
+
+                                if let ExprNode::Var(_) = other_param.node {
+                                    continue
+                                }
+
+                                should_if = true;
+
+                                self.compile_expr(other_param);
+                                self.compile_expr(&param_own);
+
+                                self.emit(OpCode::Eq);
+
+                                // if i % 3 == 0 {
+                                //     // When there are two ... we band. B-)
+                                //     self.emit(OpCode::BAnd);
+                                // }
+                            }
+                        }
+
+                        if should_if {
+                            let else_jmp = self.emit_jze();
+
+                            let mut branch = (*branch).clone();
+                            if let Some(ref mut i) = &mut branch.depth {
+                                *i += 1; // It is set one scope above.
+                            }
+
+                            self.emit(OpCode::Pop); // Pop the bool.
+                            self.var_get(&branch);
+                            let nice_arity = self.call_var(&branch, &pattern.0);
+                            self.emit(OpCode::Call(nice_arity as u8)); // In loving memory of my 15 minutes wasted. RIP.
+
+                            end_jmp.push(self.emit_jmp());
+
+                            self.patch_jmp(else_jmp);
+                            self.emit(OpCode::Pop);
+
+                            should_patch = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // End of dispatching.
+
+        let body = if let StatementNode::Block(ref body) = pattern.1.node {
+            body.clone()
         } else {
-            vec!(pattern.1)
+            vec!(pattern.1.clone())
         };
 
         for (i, statement) in body.iter().enumerate() {
             if i == body.len() - 1 {
                 if let StatementNode::Expr(ref expr) = statement.node {
-                    self.emit_return(Some(expr.clone()))
+                    self.emit_return(Some(expr.clone()));
+                    break
                 }
             }
 
             self.compile_statement(statement);
+        }
+
+        if should_patch {
+            for jmp in end_jmp {
+                self.patch_jmp(jmp);
+            }
+
+            self.emit(OpCode::Ret);
         }
 
         self.state_mut().end_scope();
@@ -343,7 +458,7 @@ impl<'a> Compiler<'a> {
 
                 chunk.write_u64(value)
             }
-            
+
             Var(ref n) => self.var_get(n),
 
             Binary(ref left, ref op, ref right) => {
@@ -388,7 +503,7 @@ impl<'a> Compiler<'a> {
                         self.patch_jmp(end_jmp)
                     },
 
-                    _ => {    
+                    _ => {
                         self.compile_expr(left);
                         self.compile_expr(right);
 
@@ -449,17 +564,8 @@ impl<'a> Compiler<'a> {
 
                 self.compile_expr(call);
 
-                // Mangle that name.
                 if let Var(ref binding) = call.node {
-                    arity = str::parse(&binding.name.split("__").last().unwrap()).unwrap();
-
-                    let mask = &binding.name.split("$").collect::<Vec<&str>>()[1..];
-
-                    for (arg, mask) in args.iter().zip(mask) {
-                        if &mask[..1] == "v" {
-                            self.compile_expr(arg)
-                        }
-                    }
+                    arity = self.call_var(binding, args);
                 } else {
                     for arg in args.iter() {
                         self.compile_expr(arg)
@@ -471,6 +577,20 @@ impl<'a> Compiler<'a> {
 
             _ => unimplemented!()
         }
+    }
+
+    fn call_var(&mut self, binding: &Binding, args: &Vec<Expr>) -> u8 {
+        let arity: u8 = str::parse(&binding.name.split("__").last().unwrap()).unwrap();
+
+        let mask = &binding.name.split("$").collect::<Vec<&str>>()[1..];
+
+        for (arg, mask) in args.iter().zip(mask) {
+            if &mask[..1] == "v" {
+                self.compile_expr(arg)
+            }
+        }
+
+        arity
     }
 
     fn var_get(&mut self, var: &Binding) {
@@ -495,7 +615,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn start_function(&mut self, name: &str, arity: u8, scope: usize) {
-        let next_function = Func::new(name.to_string(), arity);
+        let next_function = FuncBuilder::new(name.to_string(), arity);
         let state = State::new( name.to_string(), next_function, scope);
 
         self.states.push(state)
@@ -507,7 +627,7 @@ impl<'a> Compiler<'a> {
         self.locals_cache.extend(state.locals.clone());
 
         state.func.upvalue_count = state.upvalues.len();
-        state.func
+        state.func.build()
     }
 
     fn string_constant(&mut self, s: &str) -> u8 {
@@ -586,7 +706,6 @@ impl<'a> Compiler<'a> {
                 .next()
                 .expect(&format!("[bruh] upvalue marked during resolution, but wasn't found: {}", name));
 
-
         index = self.states[scope + 1].add_upvalue(index, true);
 
         if scope >= self.states.len() - 2 {
@@ -644,6 +763,15 @@ impl<'a> Compiler<'a> {
 
     fn ip(&self) -> usize {
         self.chunk().code.len()
+    }
+
+    fn patch_jmp_dumb_lol(&mut self, idx: usize, hard_offset: usize) {
+        let jmp = self.ip() + hard_offset;
+        let lo = (jmp & 0xff) as u8;
+        let hi = ((jmp >> 8) & 0xff) as u8;
+
+        self.chunk_mut().write_byte_at(idx, lo);
+        self.chunk_mut().write_byte_at(idx + 1, hi);
     }
 
     fn patch_jmp(&mut self, idx: usize) {

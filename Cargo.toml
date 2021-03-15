@@ -13,6 +13,9 @@ fnv = "1.0.3"
 im-rc = "14.3.0"
 colored = "2.0.0"
 backtrace = "0.3.56"
+chic = "1.2.2"
+line-span = "0.1.2"
+strsim = "0.10.0"
 
 [profile.release]
 opt-level = 3

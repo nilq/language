@@ -1,26 +1,29 @@
 use logos::Span;
+use strsim::damerau_levenshtein;
 
 use super::{ast::{Statement, StatementNode, ExprNode, Expr, Binding, Op}, symtab};
 use super::symtab::SymTab;
 
-use crate::{lexer::token::Token};
+use crate::{error::{self, error}, lexer::token::Token};
 
 type TokenInfo = (Token, Span);
 
-pub struct Parser {
+pub struct Parser<'a> {
     pub stack: Vec<TokenInfo>,
     pub ast:   Vec<Statement>,
 
     symtab: SymTab,
+    src: &'a String,
 }
 
-impl Parser {
-    pub fn new(stack: Vec<TokenInfo>) -> Self {
+impl<'a> Parser<'a> {
+    pub fn new(stack: Vec<TokenInfo>, src: &'a String) -> Self {
         Parser {
             stack,
             ast: Vec::new(),
 
             symtab: SymTab::new(),
+            src,
         }
     }
 
@@ -44,7 +47,8 @@ impl Parser {
 
         let s = match current.0 {
             Let => {
-                if let Name(name) = self.next().0 {
+                let next = self.next();
+                if let Name(name) = next.0 {
                     self.eat(Assign)?;
 
                     let right = self.expression()?;
@@ -55,7 +59,7 @@ impl Parser {
                     )
 
                 } else {
-                    return Err(())
+                    return Err(error(&self.src, "expected a name", "found this one instead", "please add a name", next.1.clone()))
                 }
             },
 
@@ -73,24 +77,64 @@ impl Parser {
 
                 } else {
                     if current.0 == Match {
-                        if let Name(name) = self.next().0 {
+                        let next = self.next();
+                        if let Name(name) = next.0 {
                             self.eat(Arrow)?;
+                            self.symtab.assign_global(name.clone());
+        
+                            let body = self.patterns(&name, true)?;
+                            let mut funcs = Vec::new();
+        
+                            for pattern in body {
+                                let name = Self::mangle_name(name.clone(), &pattern.0);
 
-                            let body = self.patterns()?;
+                                let pure_arity = pattern.0.len();
+                                let binding = self.symtab.assign_local(name);
 
+                                let branch = (
+                                    pattern.0,
+                                    pattern.1,
+                                    binding.clone(),
+                                    pure_arity,
+                                );
+        
+                                let func = Statement::new(
+                                    StatementNode::Fn(binding, Box::new(branch)),
+                                    current.1.clone()
+                                );
+        
+                                funcs.push(func)
+                            }
+        
                             return Ok(
                                 Statement::new(
-                                StatementNode::Fn(self.symtab.assign_global(name), body),
+                                StatementNode::FnCluster(funcs),
                                 current.1
                                 )
                             )
-
+        
                         } else {
-                            return Err(())
+                            return Err(
+                                error(
+                                    self.src, 
+                                    "expected name of function, didn't find one",
+                                    "found this",
+                                    "give that function a name, just a little one",
+                                    next.1
+                                )
+                            )
                         }
                     }
 
-                    return Err(())
+                    return Err(
+                        error(
+                            self.src, 
+                            "global what?",
+                            "this can't be made global",
+                            "there is global match, and then there is just global",
+                            current.1
+                        )
+                    )
                 }
             },
 
@@ -110,7 +154,15 @@ impl Parser {
 
                         body.push(self.statement()?)
                     } else {
-                        return Err(())
+                        return Err(
+                            error(
+                                self.src, 
+                                "expected `}`, but hit the end",
+                                "this is the end, not a `}`",
+                                "close the braces",
+                                self.src.len() - 1 .. self.src.len()
+                            )
+                        )
                     }
                 }
 
@@ -121,18 +173,30 @@ impl Parser {
             }
 
             Match => {
-                if let Name(name) = self.next().0 {
+                let next = self.next();
+
+                if let Name(name) = next.0 {
                     self.eat(Arrow)?;
                     self.symtab.assign_local(name.clone());
 
-                    let body = self.patterns()?;
+                    let body = self.patterns(&name, false)?;
                     let mut funcs = Vec::new();
 
                     for pattern in body {
                         let name = Self::mangle_name(name.clone(), &pattern.0);
+                        let pure_arity = pattern.0.len();
+
+                        let binding = self.symtab.assign_local(name);
+
+                        let branch = (
+                            pattern.0,
+                            pattern.1,
+                            binding.clone(),
+                            pure_arity,
+                        );
 
                         let func = Statement::new(
-                            StatementNode::Fn(self.symtab.assign_local(name), vec!(pattern)),
+                            StatementNode::Fn(binding, Box::new(branch)),
                             current.1.clone()
                         );
 
@@ -141,12 +205,20 @@ impl Parser {
 
 
                     Statement::new(
-                        StatementNode::Block(funcs),
+                        StatementNode::FnCluster(funcs),
                         current.1
                     )
 
                 } else {
-                    return Err(())
+                    return Err(
+                        error(
+                            self.src, 
+                            "expected name of function, didn't find one",
+                            "found this",
+                            "give that function a name, just a little one",
+                            next.1
+                        )
+                    )
                 }
             }
 
@@ -164,7 +236,7 @@ impl Parser {
         Ok(s)
     }
 
-    fn patterns(&mut self) -> Result<Vec<(Vec<Expr>, Statement)>, ()> {
+    fn patterns(&mut self, name: &String, is_global: bool) -> Result<Vec<(Vec<Expr>, Statement)>, ()> {
         let mut body = Vec::new();
         self.eat(Token::LBrace)?;
         loop {
@@ -174,20 +246,22 @@ impl Parser {
                     break
                 }
 
-                body.push(self.pattern()?)
+                body.push(self.pattern(name, is_global)?)
             } else {
-                return Err(())
+                return Err(
+                    error(self.src, "expected `}`, but the file just ended", "finito", "do me a favor, and close that left-brace", self.src.len() - 1..self.src.len())
+                )
             }
         }
 
         Ok(body)
     }
 
-    fn pattern(&mut self) -> Result<(Vec<Expr>, Statement), ()> {
+    fn pattern(&mut self, name: &String, is_global: bool) -> Result<(Vec<Expr>, Statement), ()> {
         self.eat(Token::Pipe)?;
-        self.symtab.enter_func();
 
         let mut params = Vec::new();
+        let mut names = Vec::new();
         loop {
             if self.remaining() > 0 {
                 if self.top().0 == Token::ThiccArrow {
@@ -195,16 +269,36 @@ impl Parser {
                     break
                 }
 
+                self.symtab.enter_func();
                 if let (Token::Name(n), span) = self.top() {
+                    names.push(n.clone());
                     self.symtab.assign_local(n.clone());
                 }
 
                 let expr = self.expression()?;
 
+                self.symtab.yeet();
+
                 params.push(expr)
             } else {
-                return Err(())
+                return Err(
+                    error(self.src, "expected `=>`, but the file just ended?!", "what?", "finish the pattern", self.src.len() - 1..self.src.len())
+                )
             }
+        }
+
+        let name = Self::mangle_name(name.clone(), &params);
+
+        if is_global {
+            self.symtab.assign_global(name);
+        } else {
+            self.symtab.assign_local(name);
+        }
+
+        self.symtab.enter_func();
+
+        for name in names {
+            self.symtab.assign_local(name);
         }
 
         let body = self.statement()?;
@@ -231,6 +325,10 @@ impl Parser {
     fn postfix(&mut self, expr: Expr) -> Result<Expr, ()> {
         use self::Token::*;
 
+        if self.remaining() == 0 {
+            return Ok(expr)
+        }
+
         let current =  self.top().clone();
 
         let e = match current.0 {
@@ -249,7 +347,9 @@ impl Parser {
 
                         args.push(expr)
                     } else {
-                        return Err(())
+                        return Err(
+                            error(self.src, "expected `)`, but the file just ended?!", "what?", "close the parentheses", self.src.len() - 1..self.src.len())
+                        )
                     }
                 }
 
@@ -375,10 +475,10 @@ impl Parser {
                     )
                 }
             },
-            _ => expr
+            _ => return Ok(expr)
         };
 
-        Ok(e)
+        self.postfix(e)
     }
 
     fn atom(&mut self) -> Result<Expr, ()> {
@@ -398,15 +498,45 @@ impl Parser {
             ),
 
             Name(name) => if let Some(binding) =  self.symtab.get(&name) {
+                let mut binding = binding.clone();
+                
+                if binding.depth.is_some() {
+                    binding.depth = Some(self.symtab.current_depth())
+                }
+
                 Expr::new(
                     ExprNode::Var(
-                        binding.clone()
+                        binding
                     ),
                     current.1
                 )
             } else {
-                println!("Can't find {}", name);
-                return Err(())
+                let mut similar = Vec::new();
+
+                for scope in self.symtab.scopes.iter() {
+                    for other in scope.variables.iter() {
+
+                        if damerau_levenshtein(&name, &other.0) <= 2 {
+                            similar.push(other.0.clone())
+                        }
+                    }
+                }
+
+                for other in self.symtab.globals.iter() {
+                    if damerau_levenshtein(&name, &other.0) <= 3 {
+                        similar.push(other.0.clone())
+                    }
+                }
+
+                return Err(
+                    error(
+                        self.src, 
+                        &format!("no such variable `{}`", name),
+                        &format!("maybe one of these: [{}]?", similar.join(", ")),
+                        "find a variable that exists",
+                        current.1
+                    )
+                )
             }
 
             Not => Expr::new(
@@ -416,7 +546,7 @@ impl Parser {
                 current.1
             ),
 
-            Not => Expr::new(
+            Sub => Expr::new(
                 ExprNode::Neg(
                     Box::new(self.expression()?)
                 ),
@@ -432,14 +562,30 @@ impl Parser {
     fn parse_binary(&mut self, left: Expr) -> Result<Expr, ()> {
         let left_position = left.span.clone();
 
-        let mut expression_stack = vec![left];
-        let mut operator_stack = vec![Op::from(&self.next().0).unwrap()];
+        let next = self.next();
 
-        expression_stack.push(self.atom()?);
+        let mut expression_stack = vec![left];
+        let mut operator_stack = vec![Op::from(&next.0).unwrap()];
+
+        if self.remaining() > 0 {
+            let atom = self.atom()?;
+            expression_stack.push(self.postfix(atom)?);
+        } else {
+            return Err(
+                error(
+                    self.src, 
+                    "expected operand, but did not",
+                    "what are you doing here?",
+                    "remember to stay hydrated, my friend",
+                    next.1
+                )
+            )
+        }
 
         while operator_stack.len() > 0 {
             while self.remaining() > 0 && Self::is_operator(&self.top().0) {
-                let (operator, precedence) = Op::from(&self.next().0).unwrap();
+                let next = self.next();
+                let (operator, precedence) = Op::from(&next.0).unwrap();
 
                 if precedence < operator_stack.last().unwrap().1 {
                     let right = expression_stack.pop().unwrap();
@@ -458,7 +604,15 @@ impl Parser {
                         expression_stack.push(self.atom()?);
                         operator_stack.push((operator, precedence))
                     } else {
-                        return Err(())
+                        return Err(
+                            error(
+                                self.src, 
+                                "expected operand, but did not",
+                                "what are you doing here?",
+                                "remember to stay hydrated, my friend",
+                                next.1
+                            )
+                        )
                     }
                 } else {
                     expression_stack.push(self.atom()?);
@@ -494,8 +648,17 @@ impl Parser {
 
     fn expect(&self, token: Token) -> Result<(), ()> {
         if self.remaining() > 0 {
-            if self.top().0 != token {
-                return Err(())
+            let top = self.top();
+            if top.0 != token {
+                return Err(
+                    error(
+                        self.src, 
+                        &format!("expected `{:?}`-token", token),
+                        "found this",
+                        "it would really mean a lot if you fixed this :)",
+                        top.1.clone()
+                    )
+                )
             }
         }
 

@@ -280,7 +280,7 @@ impl Vm {
 
                 _ => todo!()
             }
-        } else {
+        } else {   
             panic!("You are calling: {:?}", callee)
         }
     }
@@ -315,6 +315,8 @@ impl Vm {
         match (a.decode(), b.decode()) {
             (Number(a), Number(b)) => return self.push((a + b).into()),
             (Obj(a), Obj(b)) => {
+                unsafe { println!("{:#?} {:#?}", a.get_unchecked(), b.get_unchecked()); };
+
                 let a = self.deref(a).as_string().unwrap();
                 let b = self.deref(b).as_string().unwrap();
 
@@ -374,6 +376,30 @@ impl Vm {
                 return self.push((a == b).into())
             },
             _ => self.push(false.into())
+        }
+    }
+
+    fn band(&mut self) {
+        let b = self.pop();
+        let a = self.pop();
+
+        use self::Variant::*;
+
+        match (a.decode(), b.decode()) {
+            (True, True) => return self.push(true.into()),
+            _ => self.push(false.into())
+        }
+    }
+
+    fn debug_stack(&self) {
+        for v in self.stack.iter() {
+            if let Variant::Obj(a) = v.decode() {
+                unsafe {
+                    println!("{:#?}", a.get_unchecked())
+                }
+            } else {
+                println!("{:#?}", v)
+            }
         }
     }
 
