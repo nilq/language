@@ -62,9 +62,7 @@ assert(boo(3 3 3)  == "nice: " + 3^3)
 func fib -> {
     | 0 => 0
     | 1 => 1
-    | n => {
-        fib(n - 1) + fib(n - 2)
-    }
+    | n => fib(n - 1) + fib(n - 2)
 }
 
 print "HOLY SHIT fucking damnnnnn: " + fib(12)

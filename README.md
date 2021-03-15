@@ -8,17 +8,13 @@ Coming to a repo and seeing nothing but a todo-list is kinda sad. Here is some s
 Executes flawlessly in 0.00s.
 
 ```
-func boo -> {
-    | 0 => "bruh what " + "working"
-    | a b => a + b
-    | 0 b => "hurra lol: " + b
-    | a b c => "nice: " + a * b * c
+func fib -> {
+    | 0 => 0
+    | 1 => 1
+    | n => fib(n - 1) + fib(n - 2)
 }
 
-assert(not boo(0)  != "bruh what working")
-assert(boo(0 "ah") == "hurra lol: ah")
-assert(boo(10 10)  == 20)
-assert(boo(3 3 3)  == "nice: " + 3^3)
+print fib(12)
 ```
 
 ## Todo
