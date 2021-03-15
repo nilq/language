@@ -25,7 +25,5 @@ print fib(12)
 - [x] Rust FFI.
 - [x] IMPORTANT: Fallback-function to get hard-to-predict values.
 - [ ] Goto and flow-control.
-- [ ] Lazy evaluation/compilation.
-- [ ] Nice errors.
+- [x] Nice errors.
 - [ ] More compact bytecode-output.
-- [ ] `polar`-datatypes.
