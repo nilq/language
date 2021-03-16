@@ -1,4 +1,4 @@
-use super::value::{*, object::{Obj, Closure, UpValue}};
+use super::value::{*, object::{Obj, Closure, UpValue, Map, List}};
 use super::heap::{Heap, Handle};
 use super::chunk::{Chunk, OpCode};
 use super::disassembler::Disassembler;
@@ -191,6 +191,113 @@ impl Vm {
             .expect("[epic bruh moment] invalid closure")
     }
 
+    fn list(&mut self) {
+        let element_count = self.read_byte();
+
+        let mut content = Vec::new();
+
+        for _ in 0 .. element_count {
+            content.push(self.pop())
+        }
+
+        let val = self.allocate(Obj::List(List::new(content))).into();
+        self.push(val)
+    }
+
+    fn set_element(&mut self) {
+        let list = self.pop();
+        let index = self.pop();
+        let value = self.pop();
+
+        let variant = match index.decode() {
+            Variant::Number(n) => HashVariant::Int(n as i64),
+            c @ Variant::True | c @ Variant::False => HashVariant::Bool(c == Variant::True),
+            Variant::Obj(ref handle) => {
+                HashVariant::Str(self.deref(*handle).as_string().unwrap().to_owned())
+            },
+            Nil => HashVariant::Nil,
+        };
+
+        let list_object = self.heap.get_mut_unchecked(list.as_object().unwrap());
+
+        if let Obj::List(list) = list_object {
+            let idx = if let Variant::Number(ref index) = index.decode() {
+                *index as usize
+            } else {
+                panic!("Can't index list with non-number")
+            };
+    
+            list.set(idx as usize, value);
+
+            return
+        }
+
+        if let Obj::Map(dict) = list_object {
+            let key = HashValue {
+                variant
+            };
+
+            dict.insert(key, value);
+        }
+    }
+
+    fn index(&mut self) {
+        let list = self.pop();
+        let index = self.pop();
+
+        let list_handle = list
+            .as_object()
+            .unwrap();
+
+        let list = self.deref(list_handle);
+
+        if let Some(list) = list.as_list() {
+            let idx = if let Variant::Number(ref index) = index.decode() {
+                *index as usize
+            } else {
+                panic!("Can't index list with non-number")
+            };
+    
+            let element = list.get(idx as usize);
+    
+            self.push(element);
+
+            return
+        }
+
+        if let Some(dict) = list.as_dict() {
+            let key = HashValue {
+                variant: index.decode().to_hash(&self.heap)
+            };
+
+            if let Some(value) = dict.get(&key) {
+                self.push(*value)
+            } else {
+                panic!("no such field `{:?}` on dict with {:#?}", key, dict.content)
+            }
+        }
+    }
+
+    fn map(&mut self) {
+        use im_rc::hashmap::HashMap;
+
+        let element_count = self.read_byte();
+
+        let mut content = std::collections::HashMap::new();
+
+        for _ in 0 .. element_count {
+            let value = self.pop();
+            let key   = HashValue {
+                variant: self.pop().decode().to_hash(&self.heap)
+            };
+
+            content.insert(key, value);
+        }
+
+        let val = self.allocate(Obj::Map(Map::new(content))).into();
+        self.push(val)
+    }
+
     fn set_upvalue(&mut self) {
         let value = self.peek();
         let idx = self.frame_mut().read_byte();
@@ -315,8 +422,6 @@ impl Vm {
         match (a.decode(), b.decode()) {
             (Number(a), Number(b)) => return self.push((a + b).into()),
             (Obj(a), Obj(b)) => {
-                unsafe { println!("{:#?} {:#?}", a.get_unchecked(), b.get_unchecked()); };
-
                 let a = self.deref(a).as_string().unwrap();
                 let b = self.deref(b).as_string().unwrap();
 

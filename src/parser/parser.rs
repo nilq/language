@@ -221,7 +221,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            c @ Elif | c @ If => {
+            c @ Elif | c @ If | c @ Unless => {
                 if c == Elif {
                     if self.maybe_elif {
                         self.maybe_elif = false;
@@ -229,16 +229,23 @@ impl<'a> Parser<'a> {
                         return Err(
                             error(
                                 self.src, 
-                                "this is an 'else-if' without an 'if'",
-                                "change to 'if'?",
-                                "elif is meant to be after 'if' and before 'else'",
+                                "this is an 'else-if' without an 'if' or 'unless'",
+                                "change to 'if' or 'unless'?",
+                                "elif is meant to be after 'if' or 'unless' and before 'else'",
                                 current.1
                             )
                         )
                     }
                 }
 
-                let cond = self.expression()?;
+                let cond = if c == Unless {
+                    Expr::new(
+                        ExprNode::Not(Box::new(self.expression()?)),
+                        current.1.clone()
+                    )
+                } else {
+                    self.expression()?
+                };
 
                 // self.eat(Arrow)?;
 
@@ -458,6 +465,19 @@ impl<'a> Parser<'a> {
         let current =  self.top().clone();
 
         let e = match current.0 {
+            LBracket => {
+                self.next();
+
+                let index = self.expression()?;
+
+                self.eat(RBracket)?;
+
+                Expr::new(
+                    ExprNode::Index(Box::new(expr), Box::new(index)),
+                    current.1
+                )
+            }
+
             LParen => {
                 self.next();
                 let mut args = Vec::new();
@@ -638,6 +658,68 @@ impl<'a> Parser<'a> {
                 )
             ),
 
+            LBracket => {
+                let mut content = Vec::new();
+                loop {
+                    if self.remaining() > 0 {
+                        if self.top().0 == Token::RBracket {
+                            self.next();
+                            break
+                        }
+
+                        let expr = self.expression()?;
+
+                        if self.top().0 != RBracket {
+                            self.eat(Comma)?;
+                        }
+
+                        content.push(expr)
+                    } else {
+                        return Err(
+                            error(self.src, "expected ']', but the file just ended?!", "what?", "close the list", self.src.len() - 1..self.src.len())
+                        )
+                    }
+                }
+
+                Expr::new(
+                    ExprNode::List(content),
+                    current.1
+                )
+            }
+
+            LBrace => {
+                let mut content = Vec::new();
+                loop {
+                    if self.remaining() > 0 {
+                        if self.top().0 == Token::RBrace {
+                            self.next();
+                            break
+                        }
+
+                        let key = self.expression()?;
+
+                        self.eat(Colon)?;
+
+                        let expr = self.expression()?;
+
+                        if self.top().0 != RBrace {
+                            self.eat(Comma)?;
+                        }
+
+                        content.push((key, expr))
+                    } else {
+                        return Err(
+                            error(self.src, "expected '}', but the file just ended?!", "what?", "close the dict", self.src.len() - 1..self.src.len())
+                        )
+                    }
+                }
+
+                Expr::new(
+                    ExprNode::Map(content),
+                    current.1
+                )
+            }
+
             String(s) => Expr::new(
                 ExprNode::String(s),
                 current.1
@@ -703,7 +785,10 @@ impl<'a> Parser<'a> {
                 current.1
             ),
 
-            c => todo!("{:?}", c)
+            c => {
+                error(self.src, "unimplemented", "here?", "this is not good", current.1);
+                todo!("{:?}", c)
+            }
         };
 
         Ok(e)

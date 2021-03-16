@@ -82,6 +82,9 @@ pub enum ExprNode {
     Call(Box<Expr>, Vec<Expr>),
     Not(Box<Expr>),
     Neg(Box<Expr>),
+    List(Vec<Expr>),
+    Map(Vec<(Expr, Expr)>),
+    Index(Box<Expr>, Box<Expr>),
     True,
     False,
 }

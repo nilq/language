@@ -611,6 +611,32 @@ impl<'a> Compiler<'a> {
                 }
             }
 
+            Index(ref expr, ref index) => {
+                self.compile_expr(index);
+                self.compile_expr(expr);
+
+                self.emit(OpCode::Index);
+            }
+
+            List(ref content) => {
+                for el in content.iter().rev() {
+                    self.compile_expr(el)
+                }
+
+                self.emit(OpCode::List);
+                self.emit_byte(content.len() as u8)
+            },
+
+            Map(ref entries) => {
+                for (key, val) in entries.iter() {
+                    self.compile_expr(key);
+                    self.compile_expr(val);
+                }
+
+                self.emit(OpCode::Map);
+                self.emit_byte(entries.len() as u8);
+            }
+
             Not(ref expr) => {
                 self.compile_expr(expr);
                 self.emit(OpCode::Not)

@@ -26,6 +26,12 @@ print fib(12)
 - [x] IMPORTANT: Fallback-function to get hard-to-predict values.
 - [x] Goto and flow-control.
 - [x] Nice errors.
-- [ ] Lists.
-- [ ] Dictionaries.
+- [x] Lists.
+- [x] Dictionaries.
+- [ ] Loops.
 - [ ] Ecnomics.
+    - [ ] Random distributions.
+    - [ ] Sum and vector operations.
+    - [ ] Correlation.
+    - [ ] Map function over list.
+- [ ] A whole simulation of simple animal spirits.

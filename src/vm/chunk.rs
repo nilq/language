@@ -37,6 +37,10 @@ pub enum OpCode {
     Lt,
     Not,
     BAnd, // Boolean and. Not jumping.
+    List,
+    Map,
+    SetElement,
+    Index,
 }
 
 impl OpCode {
@@ -84,6 +88,11 @@ impl OpCode {
             Not          => 0x28,
 
             BAnd         => 0x29,
+
+            List   => 0x30,
+            Map    => 0x31,
+            SetElement => 0x32,
+            Index => 0x33,
         };
 
         buffer.push(op)
@@ -139,6 +148,11 @@ macro_rules! decode_op {
             0x28 => $this.not(),
 
             0x29 => $this.band(),
+
+            0x30 => $this.list(),
+            0x31 => $this.map(),
+            0x32 => $this.set_element(),
+            0x33 => $this.index(),
 
             _ => unreachable!()
         }

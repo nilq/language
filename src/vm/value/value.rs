@@ -5,6 +5,21 @@ use crate::vm::{
     heap::{Heap, Handle, TaggedHandle, Tag}
 };
 
+use std::mem;
+
+#[derive(Hash, Clone, PartialEq, Eq, Debug)]
+pub enum HashVariant {
+    Bool(bool),
+    Int(i64),
+    Str(String),
+    Nil,
+}
+
+#[derive(Hash, Clone, PartialEq, Eq, Debug)]
+pub struct HashValue {
+    pub variant: HashVariant
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Variant {
     Obj(Handle<Obj>),
@@ -12,6 +27,31 @@ pub enum Variant {
     True,
     False,
     Nil,
+}
+
+impl Variant {
+    pub fn to_hash(&self, heap: &Heap<Obj>) -> HashVariant {
+        use self::Variant::*;
+
+        match *self {
+            Number(ref f) => {
+                unsafe {
+                    HashVariant::Int(
+                        mem::transmute::<f64, i64>(*f)
+                    )
+                }
+            },
+
+            True  => HashVariant::Bool(true),
+            False => HashVariant::Bool(false),
+
+            Obj(ref n) => unsafe {
+                HashVariant::Str(heap.get_unchecked(n).as_string().unwrap().clone().to_string())
+            },
+
+            Nil => HashVariant::Nil,
+        }
+    }
 }
 
 const TAG_TRUE:  u8 = 0x01;

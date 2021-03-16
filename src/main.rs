@@ -79,9 +79,16 @@ assert(fibs_brother(5) == fib(5))
 
     let jump_map = r#"
 @start
-print "hehe"
 
-goto end
+let list = [1, 23, 4]
+let map  = {
+    1: "hey " + "world",
+    3: "bob"
+}
+
+print map[1]
+
+# goto end
 goto start
 @end
     "#.to_string();
