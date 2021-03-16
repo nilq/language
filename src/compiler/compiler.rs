@@ -1,3 +1,5 @@
+use hashbrown::HashMap;
+
 use crate::vm::{
     chunk::{OpCode, Chunk},
     value::{
@@ -8,7 +10,7 @@ use crate::vm::{
 };
 use crate::parser::ast::{Statement, StatementNode, Expr, ExprNode, Binding, Op};
 
-use std::{ops::Deref, usize, collections::HashMap};
+use std::{ops::Deref, usize};
 
 #[derive(Debug, Clone)]
 pub struct Local {
@@ -33,6 +35,9 @@ pub struct State {
 
     scope_depth: usize,
     breaks: Vec<usize>,
+
+    pub labels: HashMap<String, usize>,
+    pub gotos: HashMap<String, usize>,
 }
 
 impl State {
@@ -43,8 +48,22 @@ impl State {
             scope_depth,
             func,
             line: 0,
-            breaks: Vec::new()
+            breaks: Vec::new(),
+            labels: HashMap::new(),
+            gotos: HashMap::new(),
         }
+    }
+
+    fn define_label(&mut self, name: String) {
+        self.labels.insert(name, self.func.chunk.code.len());
+    }
+
+    fn define_goto(&mut self, name: String, jmp: usize) {
+        self.gotos.insert(name, jmp);
+    }
+
+    fn get_label(&self, name: &String) -> usize {
+        *self.labels.get(name).unwrap()
     }
 
     fn capture_local(&mut self, var: &str) -> Option<u8> {
@@ -178,8 +197,18 @@ impl<'a> Compiler<'a> {
             self.compile_statement(statement)
         }
 
+        self.patch_gotos();
+
         self.emit_return(None);
         self.end_function()
+    }
+
+    fn patch_gotos(&mut self) {
+        let gotos = self.state().gotos.clone();
+        for (ref goto, ref jmp) in gotos {
+            let dest = *self.state().labels.get(goto).unwrap();
+            self.patch_jmp_manual(*jmp, dest)
+        }
     }
 
     fn compile_statement(&mut self, statement: &Statement) {
@@ -226,6 +255,16 @@ impl<'a> Compiler<'a> {
                 self.compile_expr(expr);
                 self.emit(OpCode::Print)
             },
+
+            Label(ref name) => {
+                self.state_mut().define_label(name.clone());
+            }
+
+            Goto(ref name) => {
+                let jmp = self.emit_jmp();
+
+                self.state_mut().define_goto(name.clone(), jmp)              
+            }
 
             Block(ref body) => for s in body.iter() {
                 self.compile_statement(s);
@@ -281,13 +320,37 @@ impl<'a> Compiler<'a> {
                 }
             }
 
+            If(ref cond, ref then, ref otherwise) => {
+                self.compile_expr(cond);
+
+                let else_jmp = self.emit_jze();
+
+                self.emit(OpCode::Pop);
+                self.compile_statement(then);
+
+                let end_jmp = self.emit_jmp();
+
+                self.patch_jmp(else_jmp);
+                self.emit(OpCode::Pop);
+
+                if let &Some(ref els) = otherwise {
+                    self.compile_statement(els)
+                }
+
+                self.patch_jmp(end_jmp)
+            }
+
+            Return(ref v) => self.emit_return(Some((*v).clone())),
+
             _ => unimplemented!()
         }
     }
 
     fn compile_pattern(&mut self, patterns: &Vec<&(Vec<Expr>, Statement, Binding, usize)>, pattern: &(Vec<Expr>, Statement, Binding, usize), dispatcher: &HashMap<usize, Vec<(&Binding, usize)>>) {
         // Function
-        self.var_define(&pattern.2, None);
+        if pattern.2.depth.is_some() {
+            self.var_define(&pattern.2, None);
+        }
 
         let mut params = Vec::new();
 
@@ -402,6 +465,7 @@ impl<'a> Compiler<'a> {
             self.emit(OpCode::Ret);
         }
 
+        self.patch_gotos();
         self.state_mut().end_scope();
 
         let upvalues = self.state_mut().upvalues.clone();
@@ -414,6 +478,10 @@ impl<'a> Compiler<'a> {
 
         self.emit(OpCode::Closure);
         self.emit_byte(idx);
+
+        if pattern.2.depth.is_none() {
+            self.var_define(&pattern.2, None);
+        }
 
         for upvalue in upvalues {
             self.emit_byte(
@@ -460,6 +528,9 @@ impl<'a> Compiler<'a> {
             }
 
             Var(ref n) => self.var_get(n),
+
+            True  => self.emit(OpCode::True),
+            False => self.emit(OpCode::False),
 
             Binary(ref left, ref op, ref right) => {
                 use self::Op::*;
@@ -665,6 +736,10 @@ impl<'a> Compiler<'a> {
         self.states.last_mut().expect("states can't be empty")
     }
 
+    fn state(&self) -> &State {
+        self.states.last().expect("states can't be empty")
+    }
+
     fn chunk_mut(&mut self) -> &mut Chunk {
         self.states.last_mut()
             .expect("states to be non-empty")
@@ -765,8 +840,7 @@ impl<'a> Compiler<'a> {
         self.chunk().code.len()
     }
 
-    fn patch_jmp_dumb_lol(&mut self, idx: usize, hard_offset: usize) {
-        let jmp = self.ip() + hard_offset;
+    fn patch_jmp_manual(&mut self, idx: usize, jmp: usize) {
         let lo = (jmp & 0xff) as u8;
         let hi = ((jmp >> 8) & 0xff) as u8;
 

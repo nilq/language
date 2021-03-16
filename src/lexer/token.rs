@@ -26,10 +26,8 @@ pub enum Token {
     Print,
     #[token("let")]
     Let,
-    #[token("station")]
-    Station,
-    #[token("travel")]
-    Travel,
+    #[token("goto")]
+    Goto,
     #[token("free")]
     Free,
     #[token("->")]
@@ -92,6 +90,15 @@ pub enum Token {
     #[token("not")]
     Not,
 
+    #[token("true")]
+    True,
+    #[token("false")]
+    False,
+    #[token("True")]
+    PythonTrue,
+    #[token("False")]
+    PythonFalse,
+
     #[token("{")]
     LBrace,
     #[token("}")]
@@ -101,6 +108,18 @@ pub enum Token {
     LParen,
     #[token(")")]
     RParen,
+
+    #[token("if")]
+    If,
+    #[token("unless")]
+    Unless,
+    #[token("elif")]
+    Elif,
+    #[token("else")]
+    Else,
+
+    #[token("return")]
+    Return,
 
     // #[regex(r"[\t]+", |lex| lex.slice().len() as u8)]
     // Indent(u8),

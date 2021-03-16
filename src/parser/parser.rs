@@ -14,6 +14,8 @@ pub struct Parser<'a> {
 
     symtab: SymTab,
     src: &'a String,
+
+    maybe_elif: bool
 }
 
 impl<'a> Parser<'a> {
@@ -24,6 +26,8 @@ impl<'a> Parser<'a> {
 
             symtab: SymTab::new(),
             src,
+
+            maybe_elif: false
         }
     }
 
@@ -37,7 +41,40 @@ impl<'a> Parser<'a> {
             self.ast.push(s);
         }
 
+        self.resolve_gotos()?;
+
         Ok(self.ast)
+    }
+    
+    fn resolve_gotos(&self) -> Result<(), ()> {
+
+        let mut similar = Vec::new();
+
+        for (name, span) in self.symtab.gotos() {
+            if !self.symtab.has_label(name) {
+                for other in self.symtab.labels().iter() {    
+                    if damerau_levenshtein(&name, &other) <= 2 {
+                        similar.push(other.clone())
+                    }
+                }
+        
+                return Err(
+                    error(
+                        self.src, 
+                        &format!("no such label '{}'", name),
+                        &if similar.len() > 0 {
+                            format!("maybe one of these: [{}]?", similar.join(", "))
+                        } else {
+                            "change this :)".to_string()
+                        },
+                        "there's no way that is a real place :P",
+                        span.clone()
+                    )
+                )
+            }
+        }
+
+        Ok(())
     }
 
     fn statement(&mut self) -> Result<Statement, ()> {
@@ -89,7 +126,7 @@ impl<'a> Parser<'a> {
                                 let name = Self::mangle_name(name.clone(), &pattern.0);
 
                                 let pure_arity = pattern.0.len();
-                                let binding = self.symtab.assign_local(name);
+                                let binding = self.symtab.assign_global(name);
 
                                 let branch = (
                                     pattern.0,
@@ -136,7 +173,96 @@ impl<'a> Parser<'a> {
                         )
                     )
                 }
-            },
+            }
+
+            Return => Statement::new(
+                StatementNode::Return(self.expression()?),
+                current.1,
+            ),
+
+            At => {
+                if let Name(name) = self.next().0 {
+                    self.symtab.add_label(name.clone());
+
+                    Statement::new(
+                        StatementNode::Label(name),
+                        current.1
+                    )
+                } else {
+                    return Err(
+                        error(
+                            self.src,
+                            "this label needs a name",
+                            "name as in identifier",
+                            "where will you be going?",
+                            current.1
+                        )
+                    )
+                }
+            }
+
+            Goto => {
+                if let Name(name) = self.next().0 {
+                    self.symtab.add_goto(name.clone(), current.1.clone());
+                    Statement::new(
+                        StatementNode::Goto(name),
+                        current.1
+                    )
+                } else {
+                    return Err(
+                        error(
+                            self.src, 
+                            "goto needs a label to go to",
+                            "identifier, please",
+                            "so, where are we going?",
+                            current.1
+                        )
+                    )
+                }
+            }
+
+            c @ Elif | c @ If => {
+                if c == Elif {
+                    if self.maybe_elif {
+                        self.maybe_elif = false;
+                    } else {
+                        return Err(
+                            error(
+                                self.src, 
+                                "this is an 'else-if' without an 'if'",
+                                "change to 'if'?",
+                                "elif is meant to be after 'if' and before 'else'",
+                                current.1
+                            )
+                        )
+                    }
+                }
+
+                let cond = self.expression()?;
+
+                // self.eat(Arrow)?;
+
+                let then = self.statement()?;
+
+                let mut else_branch = None;
+
+                if self.remaining() > 1 {
+                    if self.top().0 == Elif {
+                        self.maybe_elif = true;
+                        else_branch = Some(Box::new(self.statement()?))
+                    } else if self.top().0 == Else {
+                        self.next();
+                        // self.eat(Arrow)?;
+
+                        else_branch = Some(Box::new(self.statement()?))
+                    }
+                }
+
+                Statement::new(
+                    StatementNode::If(cond, Box::new(then), else_branch),
+                    current.1
+                )
+            }
 
             Print => Statement::new(
                 StatementNode::Print(self.expression()?),
@@ -276,7 +402,6 @@ impl<'a> Parser<'a> {
                 }
 
                 let expr = self.expression()?;
-
                 self.symtab.yeet();
 
                 params.push(expr)
@@ -303,6 +428,7 @@ impl<'a> Parser<'a> {
 
         let body = self.statement()?;
 
+        self.resolve_gotos()?;
         self.symtab.yeet();
 
         Ok((params, body))
@@ -492,6 +618,26 @@ impl<'a> Parser<'a> {
                 current.1
             ),
 
+            True => Expr::new(
+                ExprNode::True,
+                current.1
+            ),
+
+            False => Expr::new(
+                ExprNode::False,
+                current.1
+            ),
+
+            // capitalized True | False
+            PythonTrue | PythonFalse => return Err(
+                error(
+                    self.src,
+                    "ssssSSSSsssSSSssss",
+                    "sssssSssss", "sssssssssssSSSSSsssSSSsssssss",
+                    current.1
+                )
+            ),
+
             String(s) => Expr::new(
                 ExprNode::String(s),
                 current.1
@@ -532,7 +678,11 @@ impl<'a> Parser<'a> {
                     error(
                         self.src, 
                         &format!("no such variable `{}`", name),
-                        &format!("maybe one of these: [{}]?", similar.join(", ")),
+                            &if similar.len() > 0 {
+                                format!("maybe one of these: [{}]?", similar.join(", "))
+                            } else {
+                                "change this :)".to_string()
+                            },
                         "find a variable that exists",
                         current.1
                     )

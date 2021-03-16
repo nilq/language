@@ -29,7 +29,7 @@ impl<'c> Disassembler<'c> {
 
         println!();
         let name = format!("{}:", self.chunk.name);
-        eprint!("{}", name.cyan());
+        eprint!("{}", name.magenta());
 
         while self.offset < bytes.len() {
             self.disassemble_instruction();
@@ -48,7 +48,7 @@ impl<'c> Disassembler<'c> {
         println!();
         let off = format!("{:04} | ", self.offset);
 
-        eprint!("{}", off.blue());
+        eprint!("{}", off.red());
         decode_op!(inst, self);
     }
 

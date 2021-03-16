@@ -1,6 +1,6 @@
 use logos::Span;
 
-use crate::lexer::token::Token;
+use crate::{compiler::State, lexer::token::Token};
 
 #[derive(Debug, Clone)]
 pub enum Op {
@@ -82,6 +82,8 @@ pub enum ExprNode {
     Call(Box<Expr>, Vec<Expr>),
     Not(Box<Expr>),
     Neg(Box<Expr>),
+    True,
+    False,
 }
 
 #[derive(Debug, Clone)]
@@ -169,6 +171,10 @@ pub enum StatementNode {
     Block(Vec<Statement>),
     Expr(Expr),
     Print(Expr),
+    If(Expr, Box<Statement>, Option<Box<Statement>>),
+    Return(Expr),
+    Label(String),
+    Goto(String),
 }
 
 #[derive(Debug, Clone)]

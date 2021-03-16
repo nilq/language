@@ -1,3 +1,5 @@
+use logos::Span;
+
 use std::collections::HashMap;
 use crate::parser::ast::Binding;
 
@@ -5,6 +7,8 @@ pub struct Scope {
     depth: usize,
     function_depth: usize,
     pub variables: HashMap<String, Binding>,
+    pub labels: Vec<String>,
+    pub gotos: HashMap<String, Span>,
 }
 
 impl Scope {
@@ -12,7 +16,9 @@ impl Scope {
         Scope {
             depth: 0,
             function_depth: 0,
-            variables: HashMap::new()
+            variables: HashMap::new(),
+            labels: Vec::new(),
+            gotos: HashMap::new()
         }
     }
 
@@ -20,7 +26,9 @@ impl Scope {
         Scope {
             depth,
             function_depth,
-            variables: HashMap::new()
+            variables: HashMap::new(),
+            labels: Vec::new(),
+            gotos: HashMap::new()
         }
     }
 
@@ -28,7 +36,9 @@ impl Scope {
         Scope {
             depth: self.depth + 1,
             function_depth: self.function_depth + is_function as usize,
-            variables: HashMap::new()
+            variables: HashMap::new(),
+            labels: Vec::new(),
+            gotos: HashMap::new()
         }
     }
 
@@ -45,6 +55,14 @@ impl Scope {
         );
 
         binding
+    }
+
+    pub fn add_goto(&mut self, name: String, span: Span) {
+        self.gotos.insert(name, span);
+    }
+
+    pub fn add_label(&mut self, name: String) {
+        self.labels.push(name)
     }
 
     pub fn get(&self, name: &String) -> Option<&Binding> {
@@ -82,6 +100,26 @@ impl SymTab {
         );
 
         binding
+    }
+
+    pub fn has_label(&self, name: &String) -> bool {
+        self.top().labels.contains(name)
+    }
+
+    pub fn add_label(&mut self, name: String) {
+        self.top_mut().add_label(name)
+    }
+
+    pub fn add_goto(&mut self, name: String, span: Span) {
+        self.top_mut().add_goto(name, span)
+    }
+
+    pub fn gotos(&self) -> &HashMap<String, Span> {
+        &self.top().gotos
+    }
+
+    pub fn labels(&self) -> &Vec<String> {
+        &self.top().labels
     }
 
     pub fn get(&self, name: &String) -> Option<&Binding> {

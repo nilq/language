@@ -59,26 +59,44 @@ assert(boo(3 3 3)  == "nice: " + 3^3)
 "#;
 
     let fib = r#"
-func fib -> {
-    | 0 => 0
+global func fib -> {
+    | 0 => 1
     | 1 => 1
     | n => fib(n - 1) + fib(n - 2)
 }
 
-print "HOLY SHIT fucking damnnnnn: " + fib(12)
+func fibs_brother -> {
+    | n => if n < 2 {
+               return 1
+           } else {
+               return fibs_brother(n - 1) + fibs_brother(n - 2)
+           }
+}
+
+assert(fibs_brother(5) == fib(5))
+
     "#.to_string();
 
-    let lex = Token::lexer(&fib);
-    let parser = Parser::new(lex.spanned().collect::<Vec<(Token, Span)>>(), &fib);
+    let jump_map = r#"
+@start
+print "hehe"
+
+goto end
+goto start
+@end
+    "#.to_string();
+
+    let lex = Token::lexer(&jump_map);
+    let parser = Parser::new(lex.spanned().collect::<Vec<(Token, Span)>>(), &jump_map);
 
     if let Ok(ast) = parser.parse(&["assert", "assert$v__1"]) {
-        // println!("{:#?}", ast);
+        println!("{:#?}", ast);
         // println!("{}", func_test);
 
         let mut vm = Vm::new();
         vm.add_native("assert$v__1", prelude::assert, 1);
 
-        vm.execute(ast, false);
+        vm.execute(ast, true);
 
         // println!("{:#?}", vm.globals);
         // println!("{:#?}", vm.stack);

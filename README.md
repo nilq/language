@@ -24,6 +24,8 @@ print fib(12)
 - [x] Pattern-matching functions with name-mangling.
 - [x] Rust FFI.
 - [x] IMPORTANT: Fallback-function to get hard-to-predict values.
-- [ ] Goto and flow-control.
+- [x] Goto and flow-control.
 - [x] Nice errors.
-- [ ] More compact bytecode-output.
+- [ ] Lists.
+- [ ] Dictionaries.
+- [ ] Ecnomics.
