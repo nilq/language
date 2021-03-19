@@ -296,23 +296,13 @@ impl<'a> Compiler<'a> {
                 }
             }
 
-            // Fn(_, ref patterns) => {
-            //     // Binding var
-            //     let mut dispatcher: HashMap<usize, Vec<(&Binding, usize)>> = HashMap::new();
+            SetElement(ref list, ref index, ref value) => {
+                self.compile_expr(value);
+                self.compile_expr(index);
+                self.compile_expr(list);
 
-            //     for (i, pattern) in patterns.iter().enumerate() {
-            //         let arity = pattern.3;
-            //         let entry = (&pattern.2, i);
-
-            //         if let Some(branch) = dispatcher.get_mut(&arity) {
-            //             branch.push(entry)
-            //         } else {
-            //             dispatcher.insert(arity, vec!(entry));
-            //         }
-            //     }
-
-            //     self.compile_pattern(&patterns, pattern.clone(), &dispatcher);
-            // }
+                self.emit(OpCode::SetElement);
+            },
 
             FnCluster(ref funcs) => {
                 let mut pattern_funcs = Vec::new();

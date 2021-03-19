@@ -100,6 +100,54 @@ impl<'a> Parser<'a> {
                 }
             },
 
+            Name(ref name) => {
+                if self.top().0.clone() == Assign {
+                    let right = self.expression()?;
+
+                    if let Some(binding) = self.symtab.get(name).clone() {
+                        Statement::new(
+                            StatementNode::Assign(binding.clone(), right),
+                            current.1
+                        )
+                    } else {
+                        return Err(
+                            error(
+                                self.src, 
+                                "can't assign something that does not exisnt",
+                                "this does not exist?",
+                                "find something real to assign instead",
+                                current.1
+                            )
+                        )
+                    }
+                } else {
+
+                    let span = current.1.clone();
+                    self.stack.insert(0, current);
+
+                    let expr = self.expression()?;
+
+                    if self.top().0 == Assign {
+                        self.next();
+                        if let ExprNode::Index(ref a, ref index) = expr.node {
+                            let right = self.expression()?;
+    
+                            return Ok(
+                                Statement::new(
+                                    StatementNode::SetElement((**a).clone(), (**index).clone(), right),
+                                    span
+                                )
+                            )
+                        }
+                    }
+
+                    Statement::new(
+                        StatementNode::Expr(expr),
+                        span
+                    )
+                }
+            }
+
             Global => {
                 let current = self.next();
                 if let Name(name) = current.0 {
@@ -396,8 +444,24 @@ impl<'a> Parser<'a> {
                 let span = current.1.clone();
                 self.stack.insert(0, current);
 
+                let expr = self.expression()?;
+
+                if self.top().0 == Assign {
+                    self.next();
+                    if let ExprNode::Index(ref a, ref index) = expr.node {
+                        let right = self.expression()?;
+
+                        return Ok(
+                            Statement::new(
+                                StatementNode::SetElement((**a).clone(), (**index).clone(), right),
+                                span
+                            )
+                        )
+                    }
+                }
+
                 Statement::new(
-                    StatementNode::Expr(self.expression()?),
+                    StatementNode::Expr(expr),
                     span
                 )
             }

@@ -167,6 +167,8 @@ type Branch = (Vec<Expr>, Statement, Binding, usize);
 #[derive(Debug, Clone)]
 pub enum StatementNode {
     Assign(Binding, Expr),
+    SetElement(Expr, Expr, Expr),
+
     Fn(Binding, Box<Branch>),
     FnCluster(Vec<Statement>),
     Global(Binding, Expr),

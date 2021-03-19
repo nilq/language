@@ -78,11 +78,22 @@ assert(fibs_brother(5) == fib(5))
     "#.to_string();
 
     let jump_map = r#"
-repeat 5 print "hey"
+let a = [1, 2, 4]
+print a[1]
 
-while true {
-    print ("here we go")
+a[1] = 1337
+
+let b = {
+    "key": "bobzito"
 }
+
+print b["key"]
+
+b["key"] = "ost"
+
+print b["key"]
+
+print a[1]
     "#.to_string();
 
     let lex = Token::lexer(&jump_map);
