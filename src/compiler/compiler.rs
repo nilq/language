@@ -270,6 +270,32 @@ impl<'a> Compiler<'a> {
                 self.compile_statement(s);
             }
 
+            Repeat(ref times, ref body) => {
+                for _ in 0..*times {
+                    self.compile_statement(&body)
+                }
+            }
+
+            While(ref cond, ref body) => {
+                let ip = self.ip();
+
+                self.compile_expr(cond);
+
+                let end_jmp = self.emit_jze();
+
+                self.emit(OpCode::Pop);
+                self.compile_statement(body);
+
+                self.emit_loop(ip);
+                self.patch_jmp(end_jmp);
+
+                self.emit(OpCode::Pop);
+
+                for b in self.state_mut().breaks() {
+                    self.patch_jmp(b)
+                }
+            }
+
             // Fn(_, ref patterns) => {
             //     // Binding var
             //     let mut dispatcher: HashMap<usize, Vec<(&Binding, usize)>> = HashMap::new();

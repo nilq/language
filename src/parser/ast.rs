@@ -178,6 +178,8 @@ pub enum StatementNode {
     Return(Expr),
     Label(String),
     Goto(String),
+    Repeat(usize, Box<Statement>),
+    While(Expr, Box<Statement>)
 }
 
 #[derive(Debug, Clone)]

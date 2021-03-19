@@ -180,6 +180,43 @@ impl<'a> Parser<'a> {
                 current.1,
             ),
 
+            Repeat => {
+                let current = self.next();
+
+                if let Number(times) = current.0 {
+                    let body = self.statement()?;
+
+                    Statement::new(
+                        StatementNode::Repeat(times as usize, Box::new(body)),
+                        current.1
+                    )
+
+                } else {
+                    return Err(
+                        error(
+                            self.src,
+                            "repeat must receive a constant number",
+                            "this should be a number",
+                            "please just set an absolute number",
+                            current.1
+                        )
+                    )
+                }
+            }
+
+            While => {
+                let cond = self.expression()?;
+
+                self.expect(LBrace)?;
+
+                let body = self.statement()?;
+
+                Statement::new(
+                    StatementNode::While(cond, Box::new(body)),
+                    current.1
+                )
+            }
+
             At => {
                 if let Name(name) = self.next().0 {
                     self.symtab.add_label(name.clone());
@@ -657,6 +694,13 @@ impl<'a> Parser<'a> {
                     current.1
                 )
             ),
+
+            LParen => {
+                let expr = self.expression()?;
+                self.eat(RParen)?;
+
+                expr
+            }
 
             LBracket => {
                 let mut content = Vec::new();

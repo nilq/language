@@ -123,6 +123,11 @@ pub enum Token {
     #[token("else")]
     Else,
 
+    #[token("repeat")]
+    Repeat,
+    #[token("while")]
+    While,
+
     #[token("return")]
     Return,
 
