@@ -13,7 +13,9 @@ use std::mem;
 use std::collections::HashMap;
 
 const STACK_SIZE: usize = 6969;
-const HEAP_GROWTH: usize = 2;
+const HEAP_GROWTH: usize = 4;
+
+const GC_TRIGGER_COUNT: usize = 2048;
 
 macro_rules! binary_op {
     ($self:ident, $op:tt) => {
@@ -80,8 +82,7 @@ impl Frame {
             F: FnOnce(&Chunk) -> T
     {
         unsafe {
-            let closure = self.closure
-                .get_unchecked()
+            let closure = self.closure.get_unchecked()
                 .as_closure()
                 .expect("[bruh moment] Closure check failed.");
             fun(&closure.func.chunk)
@@ -95,6 +96,8 @@ pub struct Vm {
     pub frames: Vec<Frame>,
     pub open_upvalues: Vec<UpValue>,
     pub globals: HashMap<String, Value, FnvBuildHasher>,
+
+    next_gc: usize,
 }
 
 impl Vm {
@@ -105,6 +108,7 @@ impl Vm {
             frames: Vec::with_capacity(256),
             open_upvalues: Vec::with_capacity(16),
             globals: HashMap::with_hasher(FnvBuildHasher::default()),
+            next_gc: GC_TRIGGER_COUNT,
         }
     }
 
@@ -361,17 +365,15 @@ impl Vm {
 
         let frame_start = if last < arity as usize { 0 } else { last - (arity + 1) as usize };
 
-        let callee = self.stack.remove(frame_start).decode();
+        let callee = self.stack[frame_start].decode();
 
         if let Variant::Obj(handle) = callee {
             use self::Obj::*;
 
             match unsafe { self.heap.get_unchecked(handle) } {
                 Closure(_) => {
-
                     self.call_closure(handle, arity)
                 },
-
                 NativeFunction(ref native) => {
                     if native.arity != arity {
                         self.runtime_error(&format!("arity mismatch: {} != {} @ ({} {})", native.arity, arity, native.name, native.arity))
@@ -385,10 +387,8 @@ impl Vm {
                     self.stack.push(value);
                 },
 
-                _ => todo!()
+                _ => self.runtime_error("bad call")
             }
-        } else {   
-            panic!("You are calling: {:?}", callee)
         }
     }
 
@@ -620,7 +620,26 @@ impl Vm {
     }
 
     fn allocate(&mut self, object: Obj) -> Handle<Obj> {
-        let handle = self.heap.insert(object);
+        let handle = self.heap.insert(object).into_handle();
+
+        if self.heap.len() * mem::size_of::<Obj>() >= self.next_gc {
+            self.next_gc *= HEAP_GROWTH;
+
+            let upvalue_iter = self.open_upvalues.iter()
+                .flat_map(|u| u.get().ok())
+                .flat_map(|v| v.as_object());
+
+            let globals_iter = self.globals.values().flat_map(Value::as_object);
+            let stack_iter = self.stack.iter().flat_map(Value::as_object);
+
+            let exclude = stack_iter
+                .chain(Some(handle))
+                .chain(globals_iter)
+                .chain(upvalue_iter);
+            
+            self.heap.clean_excluding(exclude);
+        }
+
         handle
     }
 

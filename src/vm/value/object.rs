@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::fmt::{Display, Debug};
 use std::collections::HashMap;
 
-use super::super::{chunk::Chunk, heap::Heap};
+use super::super::{chunk::Chunk, heap::Heap, trace::{Trace, Tracer}};
 use super::value::{Value, WithHeap, HashVariant, HashValue};
 
 macro_rules! impl_as (
@@ -53,6 +53,20 @@ impl Obj {
     }
 }
 
+impl Trace<Self> for Obj {
+    fn trace(&self, tracer: &mut Tracer<Self>) {
+        use self::Obj::*;
+        
+        match self {
+            String(_) => {},
+            Func(f) => f.trace(tracer),
+            NativeFunction(_) => {},
+            Closure(c) => c.trace(tracer),
+            List(l) => l.trace(tracer),
+            Map(d) => d.trace(tracer)
+        }
+    }
+}
 
 impl Debug for Obj {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -135,6 +149,13 @@ impl List {
     }
 }
 
+impl Trace<Obj> for List {
+    fn trace(&self, tracer: &mut Tracer<Obj>) {
+        self.content.iter()
+            .for_each(|v| v.trace(tracer));
+    }
+}
+
 pub struct Map {
     pub content: HashMap<HashValue, Value>,
 }
@@ -160,6 +181,12 @@ impl Map {
 
     pub fn get(&self, key: &HashValue) -> Option<&Value> {
         self.content.get(key)
+    }
+}
+
+impl Trace<Obj> for Map {
+    fn trace(&self, tracer: &mut Tracer<Obj>) {
+        self.content.values().for_each(|v| v.trace(tracer));
     }
 }
 
@@ -192,6 +219,12 @@ impl Func {
 
     pub fn chunk_mut(&mut self) -> &mut Chunk {
         &mut self.chunk
+    }
+}
+
+impl Trace<Obj> for Func {
+    fn trace(&self, tracer: &mut Tracer<Obj>) {
+        self.chunk.trace(tracer);
     }
 }
 
@@ -251,6 +284,16 @@ impl Closure {
         self.upvalues[i].clone()
     }
 }
+
+impl Trace<Obj> for Closure {
+    fn trace(&self, tracer: &mut Tracer<Obj>) {
+        self.func.trace(tracer);
+        self.upvalues.iter()
+            .flat_map(|u| u.get())
+            .for_each(|v| v.trace(tracer));
+    }
+}
+
 
 #[derive(Clone)]
 pub struct NativeFunction {

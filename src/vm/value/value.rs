@@ -2,7 +2,8 @@ use std::fmt::{Display, Debug};
 
 use crate::vm::{
     value::object::Obj,
-    heap::{Heap, Handle, TaggedHandle, Tag}
+    heap::{Heap, Handle, TaggedHandle, Tag},
+    trace::{Trace, Tracer}
 };
 
 use std::mem;
@@ -91,9 +92,9 @@ impl Value {
         self.handle.to_raw()
     }
 
-    pub fn float(float: f64) -> Self {
+    pub fn number(number: f64) -> Self {
         Value {
-            handle: TaggedHandle::from_float(float),
+            handle: TaggedHandle::from_float(number),
         }
     }
 
@@ -136,6 +137,14 @@ impl Value {
     }
 }
 
+impl Trace<Obj> for Value {
+    fn trace(&self, tracer: &mut Tracer<Obj>) {
+        if let Variant::Obj(obj) = self.decode() {
+            obj.trace(tracer);
+        }
+    }
+}
+
 impl Debug for Value {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match self.decode() {
@@ -156,7 +165,7 @@ impl From<Handle<Obj>> for Value {
 
 impl Into<Value> for f64 {
     fn into(self) -> Value {
-        Value::float(self)
+        Value::number(self)
     }
 }
 

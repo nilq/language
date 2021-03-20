@@ -282,8 +282,8 @@ impl<'a> Compiler<'a> {
                 self.compile_expr(cond);
 
                 let end_jmp = self.emit_jze();
-
                 self.emit(OpCode::Pop);
+
                 self.compile_statement(body);
 
                 self.emit_loop(ip);
@@ -295,6 +295,11 @@ impl<'a> Compiler<'a> {
                     self.patch_jmp(b)
                 }
             }
+
+            Break => {
+                let jmp = self.emit_jmp();
+                self.state_mut().add_break(jmp)
+            },
 
             SetElement(ref list, ref index, ref value) => {
                 self.compile_expr(value);
@@ -489,7 +494,7 @@ impl<'a> Compiler<'a> {
         let func = self.end_function();
         let handle = self.heap.insert(Obj::Func(func));
 
-        let value = Value::object(handle);
+        let value = Value::object(handle.into_handle());
         let idx = self.chunk_mut().add_constant(value);
 
         self.emit(OpCode::Closure);
@@ -537,7 +542,7 @@ impl<'a> Compiler<'a> {
             Number(n) => {
                 self.emit(OpCode::Immediate);
 
-                let value = Value::float(n).to_raw();
+                let value = Value::number(n).to_raw();
                 let chunk = self.chunk_mut();
 
                 chunk.write_u64(value)
@@ -693,7 +698,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn call_var(&mut self, binding: &Binding, args: &Vec<Expr>) -> u8 {
-        let arity: u8 = str::parse(&binding.name.split("__").last().unwrap()).unwrap();
+        let arity: u8 = if binding.name.contains("__") {
+            str::parse(&binding.name.split("__").last().unwrap()).unwrap()
+        } else {
+            0
+        };
 
         let mask = &binding.name.split("$").collect::<Vec<&str>>()[1..];
 

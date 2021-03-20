@@ -1,20 +1,29 @@
 use hashbrown::{HashMap, HashSet};
 use std::{
     hash::{Hash, Hasher},
+    rc::Rc,
 };
+
+use super::trace::{Tracer, Trace};
 
 // No GC. Just chaos.
 #[derive(Clone)]
 pub struct Heap<T> {
     obj_counter: usize,
     objects: HashSet<Handle<T>>,
+    last_sweep: usize,
+    rooted: HashMap<Handle<T>, Rc<()>>,
+    object_sweeps: HashMap<Handle<T>, usize>,
 }
 
-impl<T> Heap<T> {
+impl<T: Trace<T>> Heap<T> {
     pub fn new() -> Self {
         Self {
+            last_sweep: 0,
+            object_sweeps: HashMap::default(),
             obj_counter: 0,
             objects: HashSet::default(),
+            rooted: HashMap::default(),
         }
     }
 
@@ -23,7 +32,7 @@ impl<T> Heap<T> {
         self.obj_counter
     }
 
-    pub fn insert(&mut self, object: T) -> Handle<T> {
+    pub fn insert_temp(&mut self, object: T) -> Handle<T> {
         let ptr = Box::into_raw(Box::new(object));
 
         let gen = self.new_generation();
@@ -31,6 +40,18 @@ impl<T> Heap<T> {
         self.objects.insert(handle);
 
         handle
+    }
+
+    pub fn insert(&mut self, object: T) -> Rooted<T> {
+        let handle = self.insert_temp(object);
+
+        let rc = Rc::new(());
+        self.rooted.insert(handle, rc.clone());
+
+        Rooted {
+            rc,
+            handle,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -71,6 +92,72 @@ impl<T> Heap<T> {
             None
         }
     }
+
+    pub fn make_rooted(&mut self, handle: impl AsRef<Handle<T>>) -> Rooted<T> {
+        let handle = handle.as_ref();
+        debug_assert!(self.contains(handle));
+
+        Rooted {
+            rc: self.rooted
+                .entry(*handle)
+                .or_insert_with(|| Rc::new(()))
+                .clone(),
+            handle: *handle,
+        }
+    }
+
+    pub fn clean_excluding(&mut self, excluding: impl IntoIterator<Item=Handle<T>>) {
+        let new_sweep = self.last_sweep + 1;
+        let mut tracer = Tracer {
+            new_sweep,
+            object_sweeps: &mut self.object_sweeps,
+            objects: &self.objects,
+        };
+
+        // Mark
+        self.rooted
+            .retain(|handle, rc| {
+                if Rc::strong_count(rc) > 1 {
+                    tracer.mark(*handle);
+                    unsafe { (&*handle.ptr).trace(&mut tracer); }
+                    true
+                } else {
+                    false
+                }
+            });
+        let objects = &self.objects;
+        excluding
+            .into_iter()
+            .filter(|handle| objects.contains(&handle))
+            .for_each(|handle| {
+                tracer.mark(handle);
+                unsafe { (&*handle.ptr).trace(&mut tracer); }
+            });
+
+        // Sweep
+        let object_sweeps = &mut self.object_sweeps;
+        self.objects
+            .retain(|handle| {
+                if object_sweeps
+                    .get(handle)
+                    .map(|sweep| *sweep == new_sweep)
+                    .unwrap_or(false)
+                {
+                    true
+                } else {
+                    object_sweeps.remove(handle);
+                    drop(unsafe { Box::from_raw(handle.ptr) });
+                    false
+                }
+            });
+
+        self.last_sweep = new_sweep;
+    }
+
+    /// Clean orphaned objects from the heap.
+    pub fn clean(&mut self) {
+        self.clean_excluding(std::iter::empty());
+    }
 }
 
 impl<T> Drop for Heap<T> {
@@ -82,9 +169,40 @@ impl<T> Drop for Heap<T> {
 }
 
 #[derive(Debug)]
+pub struct Rooted<T> {
+    rc: Rc<()>,
+    handle: Handle<T>,
+}
+
+impl<T> Clone for Rooted<T> {
+    fn clone(&self) -> Self {
+        Self {
+            rc: self.rc.clone(),
+            handle: self.handle,
+        }
+    }
+}
+
+impl<T> AsRef<Handle<T>> for Rooted<T> {
+    fn as_ref(&self) -> &Handle<T> {
+        &self.handle
+    }
+}
+
+impl<T> Rooted<T> {
+    pub fn into_handle(self) -> Handle<T> {
+        self.handle
+    }
+
+    pub fn handle(&self) -> Handle<T> {
+        self.handle
+    }
+}
+
+#[derive(Debug)]
 pub struct Handle<T> {
     gen: usize,
-    ptr: *mut T,
+    pub ptr: *mut T,
 }
 
 impl<T> Handle<T> {

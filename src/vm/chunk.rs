@@ -1,5 +1,6 @@
 use super::value::{*, object::Obj};
 use super::heap::Heap;
+use super::trace::{Trace, Tracer};
 
 #[repr(u8)]
 #[derive(Debug)]
@@ -173,6 +174,12 @@ pub struct Chunk {
     lines: Vec<Line>,
 }
 
+impl Trace<Obj> for Chunk {
+    fn trace(&self, tracer: &mut Tracer<Obj>) {
+        self.constants.trace(tracer);
+    }
+}
+
 impl Chunk {
     pub fn new(name: String) -> Self {
         Chunk {
@@ -273,8 +280,8 @@ impl Chunk {
             }
         }
 
-        let handle = heap.insert(Obj::String(string.to_owned()));
-        self.add_constant(Value::object(handle))
+        let handle = heap.insert(Obj::String(string.to_owned())).into_handle();
+        self.add_constant(Value::object(handle.into()))
     }
 
     pub fn line(&self, offset: usize) -> usize {

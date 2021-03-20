@@ -16,6 +16,7 @@ backtrace = "0.3.56"
 chic = "1.2.2"
 line-span = "0.1.2"
 strsim = "0.10.0"
+rand = "0.8.3"
 
 [profile.release]
 opt-level = 3

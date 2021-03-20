@@ -4,3 +4,4 @@ pub mod chunk;
 pub mod value;
 pub mod heap;
 pub mod disassembler;
+pub mod trace;

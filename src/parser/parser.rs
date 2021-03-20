@@ -100,8 +100,14 @@ impl<'a> Parser<'a> {
                 }
             },
 
+            Break => Statement::new(
+                StatementNode::Break,
+                current.1
+            ),
+
             Name(ref name) => {
                 if self.top().0.clone() == Assign {
+                    self.next();
                     let right = self.expression()?;
 
                     if let Some(binding) = self.symtab.get(name).clone() {
@@ -127,17 +133,19 @@ impl<'a> Parser<'a> {
 
                     let expr = self.expression()?;
 
-                    if self.top().0 == Assign {
-                        self.next();
-                        if let ExprNode::Index(ref a, ref index) = expr.node {
-                            let right = self.expression()?;
-    
-                            return Ok(
-                                Statement::new(
-                                    StatementNode::SetElement((**a).clone(), (**index).clone(), right),
-                                    span
+                    if self.remaining() > 0 {
+                        if self.top().0 == Assign {
+                            self.next();
+                            if let ExprNode::Index(ref a, ref index) = expr.node {
+                                let right = self.expression()?;
+        
+                                return Ok(
+                                    Statement::new(
+                                        StatementNode::SetElement((**a).clone(), (**index).clone(), right),
+                                        span
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
 

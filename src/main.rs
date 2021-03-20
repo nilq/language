@@ -74,37 +74,43 @@ func fibs_brother -> {
 }
 
 assert(fibs_brother(5) == fib(5))
-
     "#.to_string();
 
     let jump_map = r#"
-let a = [1, 2, 4]
-print a[1]
+print shuffle([1, 2, 3, 4])
 
-a[1] = 1337
+global i      = 0
+global values = [0, 0, 0, 0, 0]
 
-let b = {
-    "key": "bobzito"
+repeat 5 {
+    values[i] = random()
+    print values[i]
+    i = i + 1
 }
-
-print b["key"]
-
-b["key"] = "ost"
-
-print b["key"]
-
-print a[1]
     "#.to_string();
 
     let lex = Token::lexer(&jump_map);
     let parser = Parser::new(lex.spanned().collect::<Vec<(Token, Span)>>(), &jump_map);
 
-    if let Ok(ast) = parser.parse(&["assert", "assert$v__1"]) {
+    if let Ok(ast) = parser.parse(&[
+        "assert", "assert$v__1",
+        "sum", "sum$v__1",
+        "len", "len$v__1",
+        "gc",
+        "random",
+        "shuffle", "shuffle$v__1",
+    ]) {
         println!("{:#?}", ast);
         // println!("{}", func_test);
 
         let mut vm = Vm::new();
+
         vm.add_native("assert$v__1", prelude::assert, 1);
+        vm.add_native("sum$v__1", prelude::sum, 1);
+        vm.add_native("len$v__1", prelude::len, 1);
+        vm.add_native("gc", prelude::gc, 0);
+        vm.add_native("shuffle$v__1", prelude::shuffle, 1);
+        vm.add_native("random", prelude::random, 0);
 
         vm.execute(ast, true);
 

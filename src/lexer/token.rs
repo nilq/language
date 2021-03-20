@@ -89,6 +89,8 @@ pub enum Token {
 
     #[token("not")]
     Not,
+    #[token("break")]
+    Break,
 
     #[token("true")]
     True,
