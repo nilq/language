@@ -1,5 +1,6 @@
-# spirit
-# an animal one
+# Language
+
+It's just a language.
 
 ## Syntax-teaser
 
@@ -28,10 +29,10 @@ print fib(12)
 - [x] Nice errors.
 - [x] Lists.
 - [x] Dictionaries.
-- [ ] Loops.
-- [ ] Ecnomics.
-    - [ ] Random distributions.
-    - [ ] Sum and vector operations.
-    - [ ] Correlation.
-    - [ ] Map function over list.
-- [ ] A whole simulation of simple animal spirits.
+- [x] Loops.
+- [x] Ecnomics.
+    - [x] Random distributions.
+    - [x] Sum and vector operations.
+    - [x] List-related functions.
+    - [x] Map function over list.
+- [x] A whole simulation of simple transactions.
