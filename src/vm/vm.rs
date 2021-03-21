@@ -30,7 +30,7 @@ macro_rules! binary_op {
                 return
             },
 
-            _ => panic!("can't operate these.")
+            _ => panic!("can't operate these: {:#?} {:#?}", a, b)
         }
     }
 }
@@ -578,7 +578,7 @@ impl Vm {
 
     fn push(&mut self, value: Value) {
         if self.stack.len() == STACK_SIZE {
-            panic!("STACK OVERFLOW >:(");
+            panic!("STACK OVERFLOW >:( = {:#?}", self.stack);
         }
 
         self.stack.push(value);

@@ -454,17 +454,20 @@ impl<'a> Parser<'a> {
 
                 let expr = self.expression()?;
 
-                if self.top().0 == Assign {
-                    self.next();
-                    if let ExprNode::Index(ref a, ref index) = expr.node {
-                        let right = self.expression()?;
+                if self.remaining() > 0 {
 
-                        return Ok(
-                            Statement::new(
-                                StatementNode::SetElement((**a).clone(), (**index).clone(), right),
-                                span
+                    if self.top().0 == Assign {
+                        self.next();
+                        if let ExprNode::Index(ref a, ref index) = expr.node {
+                            let right = self.expression()?;
+
+                            return Ok(
+                                Statement::new(
+                                    StatementNode::SetElement((**a).clone(), (**index).clone(), right),
+                                    span
+                                )
                             )
-                        )
+                        }
                     }
                 }
 
@@ -952,7 +955,8 @@ impl<'a> Parser<'a> {
                     ));
 
                     if self.remaining() > 0 {
-                        expression_stack.push(self.atom()?);
+                        let atom = self.atom()?;
+                        expression_stack.push(self.postfix(atom)?);
                         operator_stack.push((operator, precedence))
                     } else {
                         return Err(
@@ -966,7 +970,8 @@ impl<'a> Parser<'a> {
                         )
                     }
                 } else {
-                    expression_stack.push(self.atom()?);
+                    let atom = self.atom()?;
+                    expression_stack.push(self.postfix(atom)?);
                     operator_stack.push((operator, precedence))
                 }
             }

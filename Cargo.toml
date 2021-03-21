@@ -1,5 +1,5 @@
 [package]
-name = "m3"
+name = "language"
 version = "0.1.0"
 authors = ["nilq <i.am.niels.nielsen@gmail.com>"]
 edition = "2018"
@@ -17,6 +17,9 @@ chic = "1.2.2"
 line-span = "0.1.2"
 strsim = "0.10.0"
 rand = "0.8.3"
+textplots = "0.5.4"
+rand_distr = "0.4.0"
+histogram = "0.6.9"
 
 [profile.release]
 opt-level = 3
