@@ -191,7 +191,7 @@ impl<'a> Compiler<'a> {
     }
 
     pub fn compile(&mut self, ast: Vec<Statement>) -> Func {
-        self.start_function("m3", 0, 0);
+        self.start_function("root", 0, 0);
 
         for statement in ast.iter() {
             self.compile_statement(statement)

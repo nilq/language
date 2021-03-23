@@ -5,6 +5,10 @@ use super::disassembler::Disassembler;
 
 use fnv::FnvBuildHasher;
 
+use flame as f;
+use flamer::flame;
+use std::fs::File;
+
 #[macro_use]
 use crate::decode_op;
 use crate::{compiler::{Compiler}, parser::ast::Statement};
@@ -130,6 +134,10 @@ impl Vm {
         self.push(Value::object(value));
         self.call(0);
         self.run();
+
+        if debug {
+            f::dump_html(File::create("flamegraph.html").unwrap()).unwrap();
+        }
     }
 
     fn run(&mut self)  {
@@ -139,6 +147,7 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn define_global(&mut self) {
         let var = self.frame_mut().read_constant()
             .as_object()
@@ -195,6 +204,7 @@ impl Vm {
             .expect("[epic bruh moment] invalid closure")
     }
 
+    #[flame]
     fn list(&mut self) {
         let element_count = self.read_byte();
 
@@ -208,6 +218,7 @@ impl Vm {
         self.push(val)
     }
 
+    #[flame]
     fn set_element(&mut self) {
         let list = self.pop();
         let index = self.pop();
@@ -245,6 +256,7 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn index(&mut self) {
         let list = self.pop();
         let index = self.pop();
@@ -282,6 +294,7 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn map(&mut self) {
         use im_rc::hashmap::HashMap;
 
@@ -302,6 +315,7 @@ impl Vm {
         self.push(val)
     }
 
+    #[flame]
     fn set_upvalue(&mut self) {
         let value = self.peek();
         let idx = self.frame_mut().read_byte();
@@ -313,6 +327,7 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn get_upvalue(&mut self) {
         let idx = self.frame_mut().read_byte();
         let value = self.current_closure()
@@ -323,6 +338,7 @@ impl Vm {
         self.push(value)
     }
 
+    #[flame]
     fn get_local(&mut self) {
         let start = self.frame().stack_start;
         let idx = self.read_byte() as usize;
@@ -331,6 +347,7 @@ impl Vm {
         self.push(val)
     }
 
+    #[flame]
     fn set_local(&mut self) {
         let val = self.peek();
         let start = self.frame().stack_start;
@@ -344,6 +361,7 @@ impl Vm {
         self.push(val)
     }
 
+    #[flame]
     fn call_closure(&mut self, handle: Handle<Obj>, arity: u8) {
         let closure = self.deref(handle)
             .as_closure()
@@ -413,6 +431,7 @@ impl Vm {
         ::std::process::exit(1);
     }
 
+    #[flame]
     fn add(&mut self) {
         let b = self.pop();
         let a = self.pop();
@@ -448,6 +467,7 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn not(&mut self) {
         let a = self.pop();
 
@@ -460,12 +480,14 @@ impl Vm {
         )
     }
 
+    #[flame]
     fn neg(&mut self) {
         if let Variant::Number(a) = self.pop().decode() {
             self.push((-a).into());
         }
     }
 
+    #[flame]
     fn eq(&mut self) {
         let b = self.pop();
         let a = self.pop();
@@ -484,6 +506,7 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn band(&mut self) {
         let b = self.pop();
         let a = self.pop();
@@ -508,35 +531,43 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn gt(&mut self) {
         binary_op!(self, >);
     }
 
+    #[flame]
     fn lt(&mut self) {
         binary_op!(self, <);
     }
 
+    #[flame]
     fn sub(&mut self) {
         binary_op!(self, -);
     }
 
+    #[flame]
     fn mul(&mut self) {
         binary_op!(self, *);
     }
 
+    #[flame]
     fn modulo(&mut self) {
         binary_op!(self, %);
     }
 
+    #[flame]
     fn div(&mut self) {
         binary_op!(self, /);
     }
 
+    #[flame]
     fn print(&mut self) {
         let value = self.pop();
         println!("{}", value.with_heap(&self.heap))
     }
 
+    #[flame]
     fn closure(&mut self) {
         let value = self.frame_mut().read_constant();
         let function = value.as_object()
@@ -565,6 +596,7 @@ impl Vm {
         self.push(value)
     }
 
+    #[flame]
     fn pow(&mut self) {
         let b = self.pop();
         let a = self.pop();
@@ -619,6 +651,7 @@ impl Vm {
         self.stack.pop().expect("stack to be nonempty")
     }
 
+    #[flame]
     fn allocate(&mut self, object: Obj) -> Handle<Obj> {
         let handle = self.heap.insert(object).into_handle();
 
@@ -643,14 +676,17 @@ impl Vm {
         handle
     }
 
+    #[flame]
     fn deref(&self, o: Handle<Obj>) -> &Obj {
         unsafe { self.heap.get_unchecked(o) }
     }
 
+    #[flame]
     fn deref_mut(&mut self, o: Handle<Obj>) -> &mut Obj {
         self.heap.get_mut_unchecked(o)
     }
 
+    #[flame]
     fn immediate(&mut self) {
         let raw = self.frame_mut().read_u64();
         let val = unsafe { Value::from_raw(raw) };
@@ -658,22 +694,27 @@ impl Vm {
         self.push(val)
     }
 
+    #[flame]
     fn imm_nil(&mut self) {
         self.push(Value::nil());
     }
 
+    #[flame]
     fn imm_true(&mut self) {
         self.push(Value::truelit());
     }
 
+    #[flame]
     fn imm_false(&mut self) {
         self.push(Value::falselit());
     }
 
+    #[flame]
     fn jmp(&mut self) {
         self.frame_mut().ip = self.read_u16() as usize
     }
 
+    #[flame]
     fn jze(&mut self) {
         let ip = self.read_u16();
         if !self.peek().truthy() {
@@ -681,10 +722,12 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn loopy(&mut self) {
         self.frame_mut().ip -= self.read_u16() as usize
     }
 
+    #[flame]
     fn close_upvalue(&mut self) {
         let end = self.stack.len() - 1;
 
@@ -692,6 +735,7 @@ impl Vm {
         self.pop();
     }
 
+    #[flame]
     fn close_upvalues(&mut self, stack_end: usize) {
         let mut open_upvalues = Vec::new();
 
@@ -706,6 +750,7 @@ impl Vm {
         }
     }
 
+    #[flame]
     fn ret(&mut self) {
         if let Some(frame) = self.frames.pop() {
             let return_value = self.pop();

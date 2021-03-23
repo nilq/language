@@ -1,5 +1,8 @@
 #![feature(allocator_api)]
 
+extern crate flame;
+#[macro_use] extern crate flamer;
+
 extern crate colored;
 extern crate textplots;
 
@@ -234,7 +237,6 @@ func simulate -> {
                 yield = transaction(merchant_a merchant_b 0.5)
             }
 
-
             N[ab[0]] = yield[0]
             N[ab[1]] = yield[1]
 
@@ -306,7 +308,11 @@ sim_winner(400 100)
     "#.to_string();
 
     let lex = Token::lexer(&jump_map);
-    let parser = Parser::new(lex.spanned().collect::<Vec<(Token, Span)>>(), &jump_map);
+    let tokens = lex.spanned().collect::<Vec<(Token, Span)>>();
+
+    println!("{:#?}", tokens);
+
+    let parser = Parser::new(tokens, &jump_map);
 
     if let Ok(ast) = parser.parse(&[
         "assert", "assert$v__1",
