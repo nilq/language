@@ -1,8 +1,8 @@
 # Language
 
-It's just a language.
+A language for macro-economic modeling - specifically Monte Carlo experiments and agent based simulations.
 
-## Syntax-teaser
+## Syntax
 
 Coming to a repo and seeing nothing but a todo-list is kinda sad. Here is some syntax I just used for testing.
 
@@ -30,7 +30,7 @@ print fib(12)
 - [x] Lists.
 - [x] Dictionaries.
 - [x] Loops.
-- [x] Ecnomics.
+- [x] Economics.
     - [x] Random distributions.
     - [x] Sum and vector operations.
     - [x] List-related functions.
