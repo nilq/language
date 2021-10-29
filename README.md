@@ -1,4 +1,6 @@
 # Language
+## A small project written for my final college report.
+> Got a 10 for this ... "nOt EcOnOmIc EnOuGh"
 
 A language for macro-economic modeling - specifically Monte Carlo experiments and agent based simulations.
 
